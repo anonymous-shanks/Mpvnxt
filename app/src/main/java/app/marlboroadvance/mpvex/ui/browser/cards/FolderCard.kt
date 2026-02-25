@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -33,7 +35,6 @@ import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.preferences.BrowserPreferences
 import app.marlboroadvance.mpvex.preferences.preference.collectAsState
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.material3.ListItemDefaults.verticalAlignment
 import org.koin.compose.koinInject
 import kotlin.math.pow
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +48,7 @@ fun FolderCard(
   isRecentlyPlayed: Boolean = false,
   onLongClick: (() -> Unit)? = null,
   isSelected: Boolean = false,
+  isPinned: Boolean = false,
   onThumbClick: () -> Unit = {},
   showDateModified: Boolean = false,
   customIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
@@ -74,15 +76,15 @@ fun FolderCard(
         onClick = onClick,
         onLongClick = onLongClick,
       ),
-    colors = CardDefaults. cardColors(containerColor = Color. Transparent),
+    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
   ) {
     if (isGridMode) {
       // GRID LAYOUT - Vertical arrangement
       Column(
         modifier = Modifier
-          . fillMaxWidth()
+          .fillMaxWidth()
           .background(
-            if (isSelected) MaterialTheme.colorScheme.tertiary. copy(alpha = 0.3f) else Color.Transparent,
+            if (isSelected) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else Color.Transparent,
           )
           .padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -97,18 +99,14 @@ fun FolderCard(
         val spacing = 8.dp
 
         val thumbWidthDp = if (folderGridColumns > 1) {
-          // (screen - padding - total spacing) / columns
           val totalSpacing = spacing * (folderGridColumns - 1)
           ((screenWidthDp - horizontalPadding - totalSpacing) / folderGridColumns).coerceAtLeast(120.dp)
         } else {
-          // single column fallback
           160.dp
         }
         val aspect = 16f / 9f
         val thumbHeightDp = thumbWidthDp / aspect
 
-        val context = LocalContext.current
-        
         Box(
           modifier = Modifier
             .width(thumbWidthDp)
@@ -128,10 +126,28 @@ fun FolderCard(
             tint = MaterialTheme.colorScheme.secondary,
           )
 
+          // Pin Icon for Grid
+          if (isPinned) {
+            Box(
+              modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(6.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(4.dp),
+            ) {
+              Icon(
+                Icons.Filled.PushPin,
+                contentDescription = "Pinned",
+                modifier = Modifier.size(16.dp),
+                tint = Color.White,
+              )
+            }
+          }
+
           if (newVideoCount > 0) {
             Box(
-              modifier =
-                Modifier
+              modifier = Modifier
                   .align(Alignment.TopEnd)
                   .padding(6.dp)
                   .clip(RoundedCornerShape(4.dp))
@@ -140,9 +156,7 @@ fun FolderCard(
             ) {
               Text(
                 text = newVideoCount.toString(),
-                style = MaterialTheme.typography.labelSmall.copy(
-                  fontWeight = FontWeight.Bold,
-                ),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = Color.White,
               )
             }
@@ -173,22 +187,22 @@ fun FolderCard(
           style = MaterialTheme.typography.titleSmall,
           color = if (isRecentlyPlayed) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface,
           maxLines = maxLines,
-          overflow = TextOverflow. Ellipsis,
-          textAlign = androidx.compose.ui. text.style.TextAlign.Center,
+          overflow = TextOverflow.Ellipsis,
+          textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
 
         if (showTotalVideosChip && folder.videoCount > 0) {
           Text(
             if (folder.videoCount == 1) "1 Video" else "${folder.videoCount} Videos",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme. onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
       }
     } else {
+      // LIST LAYOUT
       Row(
-        modifier =
-          Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .background(
               if (isSelected) MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f) else Color.Transparent,
@@ -197,8 +211,7 @@ fun FolderCard(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Box(
-          modifier =
-            Modifier
+          modifier = Modifier
               .size(64.dp)
               .clip(RoundedCornerShape(12.dp))
               .background(MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -215,28 +228,41 @@ fun FolderCard(
             tint = MaterialTheme.colorScheme.secondary,
           )
 
-          // Show new video count badge if folder contains new videos
-          if (newVideoCount > 0) {
+          // Pin Icon for List
+          if (isPinned) {
             Box(
-              modifier =
-                Modifier
-                  .align(Alignment.TopEnd)
-                  .padding(4.dp)
-                  .clip(RoundedCornerShape(4.dp))
-                  .background(Color(0xFFD32F2F)) // Warning red color
-                  .padding(horizontal = 6.dp, vertical = 2.dp),
+              modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(4.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(3.dp),
             ) {
-              Text(
-              	text = newVideoCount.toString(),
-                style = MaterialTheme.typography.labelSmall.copy(
-                  fontWeight = FontWeight.Bold,
-                ),
-                color = Color.White,
+              Icon(
+                Icons.Filled.PushPin,
+                contentDescription = "Pinned",
+                modifier = Modifier.size(12.dp),
+                tint = Color.White,
               )
             }
           }
 
-
+          if (newVideoCount > 0) {
+            Box(
+              modifier = Modifier
+                  .align(Alignment.TopEnd)
+                  .padding(4.dp)
+                  .clip(RoundedCornerShape(4.dp))
+                  .background(Color(0xFFD32F2F))
+                  .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+              Text(
+              	text = newVideoCount.toString(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+              )
+            }
+          }
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(
@@ -265,24 +291,18 @@ fun FolderCard(
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
           ) {
-            // Render custom chip content first if provided
             var hasChip = false
           if (customChipContent != null) {
             customChipContent()
             hasChip = true
           }
 
-          // Hide chips at storage root level (when videoCount is 0)
             if (showTotalVideosChip && folder.videoCount > 0) {
               Text(
                 if (folder.videoCount == 1) "1 Video" else "${folder.videoCount} Videos",
                 style = MaterialTheme.typography.labelSmall,
-                modifier =
-                  Modifier
-                    .background(
-                      MaterialTheme.colorScheme.surfaceContainerHigh,
-                      RoundedCornerShape(8.dp),
-                    )
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurface,
               )
@@ -293,12 +313,8 @@ fun FolderCard(
               Text(
                 formatFileSize(folder.totalSize),
                 style = MaterialTheme.typography.labelSmall,
-                modifier =
-                  Modifier
-                    .background(
-                      MaterialTheme.colorScheme.surfaceContainerHigh,
-                      RoundedCornerShape(8.dp),
-                    )
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurface,
               )
@@ -309,30 +325,20 @@ fun FolderCard(
               Text(
                 formatDuration(folder.totalDuration),
                 style = MaterialTheme.typography.labelSmall,
-                modifier =
-                  Modifier
-                    .background(
-                      MaterialTheme.colorScheme.surfaceContainerHigh,
-                      RoundedCornerShape(8.dp),
-                    )
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurface,
               )
               hasChip = true
             }
 
-
-
             if (showDateChip && folder.lastModified > 0) {
               Text(
                 formatDate(folder.lastModified),
                 style = MaterialTheme.typography.labelSmall,
-                modifier =
-                  Modifier
-                    .background(
-                      MaterialTheme.colorScheme.surfaceContainerHigh,
-                      RoundedCornerShape(8.dp),
-                    )
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.onSurface,
               )
@@ -349,7 +355,6 @@ private fun formatDuration(durationMs: Long): String {
   val hours = seconds / 3600
   val minutes = (seconds % 3600) / 60
   val secs = seconds % 60
-
   return when {
     hours > 0 -> "${hours}h ${minutes}m"
     minutes > 0 -> "${minutes}m"
