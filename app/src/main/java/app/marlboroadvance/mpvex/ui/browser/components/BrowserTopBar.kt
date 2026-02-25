@@ -1,8 +1,10 @@
 package app.marlboroadvance.mpvex.ui.browser.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.padding
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -66,9 +69,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-/**
- * Unified top bar for browser screens that switches between normal and selection modes
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BrowserTopBar(
@@ -90,6 +90,8 @@ fun BrowserTopBar(
   onPlayClick: (() -> Unit)? = null,
   onAddToPlaylistClick: (() -> Unit)? = null,
   onPinClick: (() -> Unit)? = null,
+  isAllPinned: Boolean = false,
+  isMixedPin: Boolean = false,
   onBlacklistClick: (() -> Unit)? = null,
   onSelectAll: (() -> Unit)? = null,
   onInvertSelection: (() -> Unit)? = null,
@@ -111,6 +113,8 @@ fun BrowserTopBar(
       onPlay = onPlayClick,
       onAddToPlaylist = onAddToPlaylistClick,
       onPinClick = onPinClick,
+      isAllPinned = isAllPinned,
+      isMixedPin = isMixedPin,
       onBlacklist = onBlacklistClick,
       onSelectAll = onSelectAll,
       onInvertSelection = onInvertSelection,
@@ -132,9 +136,6 @@ fun BrowserTopBar(
   }
 }
 
-/**
- * Normal mode top bar
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NormalTopBar(
@@ -152,52 +153,28 @@ private fun NormalTopBar(
   val darkTheme = isSystemInDarkTheme()
   val themeTransition = LocalThemeTransitionState.current
   val coroutineScope = rememberCoroutineScope()
-  
-  // Track title bounds for animation position
   val titleBounds = remember { mutableStateOf(Rect.Zero) }
   
-  // Helper function to toggle dark mode
   fun toggleDarkMode() {
     when (darkMode) {
-      DarkMode.System -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Light -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.System)
-      } else {
-        preferences.darkMode.set(DarkMode.Dark)
-      }
-      DarkMode.Dark -> if (darkTheme) {
-        preferences.darkMode.set(DarkMode.Light)
-      } else {
-        preferences.darkMode.set(DarkMode.System)
-      }
+      DarkMode.System -> if (darkTheme) preferences.darkMode.set(DarkMode.Light) else preferences.darkMode.set(DarkMode.Dark)
+      DarkMode.Light -> if (darkTheme) preferences.darkMode.set(DarkMode.System) else preferences.darkMode.set(DarkMode.Dark)
+      DarkMode.Dark -> if (darkTheme) preferences.darkMode.set(DarkMode.Light) else preferences.darkMode.set(DarkMode.System)
     }
   }
 
   TopAppBar(
     colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) {
-        Color.Black
-      } else {
-        MaterialTheme.colorScheme.surfaceContainer
-      },
+      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) Color.Black else MaterialTheme.colorScheme.surfaceContainer,
     ),
     title = {
       val titleModifier = Modifier
-        .onGloballyPositioned { coordinates ->
-          titleBounds.value = coordinates.boundsInWindow()
-        }
+        .onGloballyPositioned { coordinates -> titleBounds.value = coordinates.boundsInWindow() }
         .pointerInput(onTitleLongPress) {
           detectTapGestures(
             onTap = { localOffset ->
               if (themeTransition?.isAnimating == true) return@detectTapGestures
-              val windowOffset = Offset(
-                titleBounds.value.left + localOffset.x,
-                titleBounds.value.top + localOffset.y
-              )
+              val windowOffset = Offset(titleBounds.value.left + localOffset.x, titleBounds.value.top + localOffset.y)
               themeTransition?.startTransition(windowOffset)
               coroutineScope.launch { toggleDarkMode() }
             },
@@ -244,9 +221,6 @@ private fun NormalTopBar(
   )
 }
 
-/**
- * Selection mode top bar
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SelectionTopBar(
@@ -261,6 +235,8 @@ private fun SelectionTopBar(
   onPlay: (() -> Unit)?,
   onAddToPlaylist: (() -> Unit)?,
   onPinClick: (() -> Unit)?,
+  isAllPinned: Boolean,
+  isMixedPin: Boolean,
   onBlacklist: (() -> Unit)?,
   onSelectAll: (() -> Unit)?,
   onInvertSelection: (() -> Unit)?,
@@ -273,11 +249,7 @@ private fun SelectionTopBar(
 
   TopAppBar(
     colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) {
-        Color.Black
-      } else {
-        MaterialTheme.colorScheme.surfaceContainer
-      },
+      containerColor = if (MaterialTheme.colorScheme.background == Color.Black) Color.Black else MaterialTheme.colorScheme.surfaceContainer,
     ),
     title = {
       Row(
@@ -317,16 +289,37 @@ private fun SelectionTopBar(
       }
     },
     actions = {
-      // Primary Actions visible outside
       if (onPlay != null) {
         IconButton(onClick = onPlay, modifier = Modifier.padding(horizontal = 2.dp)) {
           Icon(Icons.Filled.PlayArrow, contentDescription = "Play", modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
         }
       }
       
+      // Smart PIN Icon (Handles Mixed, Pinned Slash, Unpinned)
       if (onPinClick != null) {
-        IconButton(onClick = onPinClick, modifier = Modifier.padding(horizontal = 2.dp)) {
-          Icon(Icons.Filled.PushPin, contentDescription = "Pin/Unpin", modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.secondary)
+        val pinTint = if (isMixedPin) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary
+        IconButton(
+          onClick = onPinClick, 
+          enabled = !isMixedPin, 
+          modifier = Modifier.padding(horizontal = 2.dp)
+        ) {
+          Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.PushPin, contentDescription = "Pin/Unpin", modifier = Modifier.size(24.dp), tint = pinTint)
+            
+            // Draw Slash if ALL selected folders are already pinned (indicates Unpin action)
+            if (isAllPinned && !isMixedPin) {
+              val errorColor = MaterialTheme.colorScheme.error
+              Canvas(modifier = Modifier.size(24.dp)) {
+                drawLine(
+                  color = errorColor,
+                  start = Offset(size.width * 0.2f, size.height * 0.2f),
+                  end = Offset(size.width * 0.8f, size.height * 0.8f),
+                  strokeWidth = 3.dp.toPx(),
+                  cap = StrokeCap.Round
+                )
+              }
+            }
+          }
         }
       }
 
@@ -342,43 +335,45 @@ private fun SelectionTopBar(
         }
       }
 
-      // 3-Dot More Menu
+      // 3-Dot More Menu wrapped in a Box to fix right alignment
       val hasMoreOptions = onRename != null || onInfo != null || onShare != null || onBlacklist != null
       if (hasMoreOptions) {
-        IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.padding(horizontal = 2.dp)) {
-          Icon(Icons.Filled.MoreVert, contentDescription = "More Options", modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.secondary)
-        }
-        
-        DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-          if (onRename != null) {
-            DropdownMenuItem(
-              text = { Text(stringResource(R.string.rename)) },
-              leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
-              onClick = { onRename(); showMoreMenu = false },
-              enabled = isSingleSelection
-            )
+        Box {
+          IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.padding(horizontal = 2.dp)) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More Options", modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.secondary)
           }
-          if (onInfo != null) {
-            DropdownMenuItem(
-              text = { Text(stringResource(R.string.info)) },
-              leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
-              onClick = { onInfo(); showMoreMenu = false },
-              enabled = isSingleSelection
-            )
-          }
-          if (onShare != null) {
-            DropdownMenuItem(
-              text = { Text(stringResource(R.string.generic_share)) },
-              leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
-              onClick = { onShare(); showMoreMenu = false }
-            )
-          }
-          if (onBlacklist != null) {
-            DropdownMenuItem(
-              text = { Text(stringResource(R.string.pref_folders_blacklist)) },
-              leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
-              onClick = { onBlacklist(); showMoreMenu = false }
-            )
+          
+          DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+            if (onRename != null) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.rename)) },
+                leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                onClick = { onRename(); showMoreMenu = false },
+                enabled = isSingleSelection
+              )
+            }
+            if (onInfo != null) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.info)) },
+                leadingIcon = { Icon(Icons.Filled.Info, contentDescription = null) },
+                onClick = { onInfo(); showMoreMenu = false },
+                enabled = isSingleSelection
+              )
+            }
+            if (onShare != null) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.generic_share)) },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                onClick = { onShare(); showMoreMenu = false }
+              )
+            }
+            if (onBlacklist != null) {
+              DropdownMenuItem(
+                text = { Text(stringResource(R.string.pref_folders_blacklist)) },
+                leadingIcon = { Icon(Icons.Filled.Block, contentDescription = null) },
+                onClick = { onBlacklist(); showMoreMenu = false }
+              )
+            }
           }
         }
       }
