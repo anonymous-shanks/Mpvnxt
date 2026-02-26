@@ -4,7 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -14,17 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -179,46 +174,25 @@ object PlayerControlsPreferencesScreen : Screen {
           }
         }
       }
-    }
-  }
 
-  @Composable
-  private fun PreferenceCategoryWithEditButton(title: String, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-      IconButton(onClick = onClick) { Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-    }
-  }
+      @Composable
+      private fun PreferenceCategoryWithEditButton(title: String, onClick: () -> Unit) {
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+          Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+          IconButton(onClick = onClick) { Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+      }
 
-  @OptIn(ExperimentalLayoutApi::class)
-  @Composable
-  private fun PreferenceIconSummary(buttons: List<PlayerButton>) {
-    FlowRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
-      if (buttons.isEmpty()) {
-        Text("None", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-      } else {
-        buttons.forEach { button -> PlayerButtonChip(button = button, enabled = true, onClick = null, badgeIcon = null, badgeColor = null) }
+      @OptIn(ExperimentalLayoutApi::class)
+      @Composable
+      private fun PreferenceIconSummary(buttons: List<PlayerButton>) {
+        FlowRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+          if (buttons.isEmpty()) {
+            Text("None", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+          } else {
+            buttons.forEach { button -> PlayerButtonChip(button = button, enabled = true, onClick = null, badgeIcon = null, badgeColor = null) }
+          }
+        }
       }
     }
-  }
-}
-
-@Composable
-fun PreferenceSectionHeader(title: String) {
-  Text(text = title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
-}
-
-@Composable
-fun PreferenceCard(content: @Composable ColumnScope.() -> Unit) {
-  Card(
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-    shape = RoundedCornerShape(16.dp),
-    content = content
-  )
-}
-
-@Composable
-fun PreferenceDivider() {
-  HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 }
