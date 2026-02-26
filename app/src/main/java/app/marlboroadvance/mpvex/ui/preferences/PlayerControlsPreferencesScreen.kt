@@ -174,25 +174,26 @@ object PlayerControlsPreferencesScreen : Screen {
           }
         }
       }
+    }
+  }
 
-      @Composable
-      private fun PreferenceCategoryWithEditButton(title: String, onClick: () -> Unit) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-          Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-          IconButton(onClick = onClick) { Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-        }
-      }
+  @Composable
+  private fun PreferenceCategoryWithEditButton(title: String, onClick: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+      Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+      IconButton(onClick = onClick) { Icon(imageVector = Icons.Outlined.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+  }
 
-      @OptIn(ExperimentalLayoutApi::class)
-      @Composable
-      private fun PreferenceIconSummary(buttons: List<PlayerButton>) {
-        FlowRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
-          if (buttons.isEmpty()) {
-            Text("None", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
-          } else {
-            buttons.forEach { button -> PlayerButtonChip(button = button, enabled = true, onClick = null, badgeIcon = null, badgeColor = null) }
-          }
-        }
+  @OptIn(ExperimentalLayoutApi::class)
+  @Composable
+  private fun PreferenceIconSummary(buttons: List<PlayerButton>) {
+    FlowRow(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)) {
+      if (buttons.isEmpty()) {
+        Text("None", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.outline)
+      } else {
+        buttons.forEach { button -> PlayerButtonChip(button = button, enabled = true, onClick = null, badgeIcon = null, badgeColor = null) }
       }
     }
+  }
 }
