@@ -76,16 +76,13 @@ data class PlaylistItem(
   val title: String,
   val index: Int,
   val isPlaying: Boolean,
-  val progressPercent: Float = 0f, // 0-100, progress of video watched
-  val isWatched: Boolean = false,  // True if video is fully watched (100%)
-  val path: String = "", // Video path for thumbnail loading
-  val duration: String = "", // Duration in formatted string (e.g., "10:30")
-  val resolution: String = "", // Resolution (e.g., "1920x1080")
+  val progressPercent: Float = 0f, 
+  val isWatched: Boolean = false,  
+  val path: String = "", 
+  val duration: String = "", 
+  val resolution: String = "", 
 )
 
-/**
- * LRU (Least Recently Used) cache for Bitmap thumbnails with a maximum size limit.
- */
 class LRUBitmapCache(private val maxSize: Int) {
   private val cache = LinkedHashMap<String, Bitmap?>(maxSize + 1, 1f, true)
   operator fun get(key: String): Bitmap? = synchronized(this) { cache[key] }
@@ -253,10 +250,10 @@ fun PlaylistTrackListItem(
             }
           }
 
-          // NEW LABEL - LIST MODE
-          if (item.progressPercent <= 0f && !item.isWatched) {
+          // FIX: NEW LABEL ALIGNED, SMALLER, AND HIDES WHEN PLAYING
+          if (!item.isPlaying && item.progressPercent <= 0f && !item.isWatched) {
             Surface(color = Color(0xFFD32F2F), shape = RoundedCornerShape(4.dp)) {
-              Text(text = "NEW", modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 9.sp), color = Color.White)
+              Text(text = "NEW", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.sp), color = Color.White)
             }
           }
         }
@@ -327,10 +324,10 @@ fun PlaylistTrackGridItem(
             }
           }
 
-          // NEW LABEL - GRID MODE
-          if (item.progressPercent <= 0f && !item.isWatched) {
+          // FIX: NEW LABEL ALIGNED, SMALLER, AND HIDES WHEN PLAYING
+          if (!item.isPlaying && item.progressPercent <= 0f && !item.isWatched) {
             Surface(color = Color(0xFFD32F2F), shape = RoundedCornerShape(4.dp)) {
-              Text(text = "NEW", modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 9.sp), color = Color.White)
+              Text(text = "NEW", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.sp), color = Color.White)
             }
           }
         }
