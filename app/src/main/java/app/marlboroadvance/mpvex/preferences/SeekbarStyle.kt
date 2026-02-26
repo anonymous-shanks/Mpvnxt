@@ -1,7 +1,4 @@
 package app.marlboroadvance.mpvex.preferences
-
-enum class SeekbarStyle {
-    Standard,
-    Wavy,
-    Thick,
-}
+import kotlinx.serialization.Serializable
+@Serializable
+enum class SeekbarStyle { Standard, Wavy, Thick, Circular } // Circular add karna zaroori hai
