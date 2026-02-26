@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -166,7 +167,7 @@ fun SeekbarWithTimers(
         contentAlignment = Alignment.Center,
       ) {
       when (seekbarStyle) {
-        SeekbarStyle.Standard, SeekbarStyle.Thick, SeekbarStyle.Circular -> { // Circular added here
+        SeekbarStyle.Standard, SeekbarStyle.Thick, SeekbarStyle.Circular -> { 
           StandardSeekbar(
             position = if (isUserInteracting) userPosition else animatedPosition.value,
             duration = duration,
@@ -399,7 +400,6 @@ fun StandardSeekbar(
     val baseTrackHeight = if (isThick) 16.dp else 6.dp
     val trackHeightDp = baseTrackHeight * heightFraction 
     
-    // Circular thumb dimension logic
     val thumbWidth = if (isCircular) 16.dp else if (isThick) 6.dp else 4.dp
     val thumbHeight = if (isCircular) 16.dp else if (isThick) 16.dp else 16.dp
     val thumbShape = if (isCircular) CircleShape else if (isThick) RoundedCornerShape(thumbWidth / 2) else CircleShape
@@ -424,7 +424,7 @@ fun StandardSeekbar(
                 val outerRadius = trackHeight / 2f
                 val innerRadius = if (isThick) outerRadius else 2.dp.toPx()
                 
-                val thumbTrackGapSize = if (isCircular) 0f else 10.dp.toPx() // No gap for circular head
+                val thumbTrackGapSize = if (isCircular) 0f else 10.dp.toPx() 
                 val gapHalf = thumbTrackGapSize / 2f
                 val chapterGapHalf = 1.dp.toPx()
                 
@@ -477,7 +477,6 @@ fun StandardSeekbar(
         },
         thumb = {
             if (isCircular) {
-                // Outer glow
                 Box(contentAlignment = Alignment.Center) {
                     Box(modifier = Modifier.size(24.dp).background(primaryColor.copy(alpha = 0.2f), CircleShape))
                     Box(modifier = Modifier.width(thumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
@@ -509,7 +508,7 @@ fun SeekbarPreview(
   
   Box(modifier = modifier.height(32.dp), contentAlignment = Alignment.Center) {
     when (style) {
-      SeekbarStyle.Standard, SeekbarStyle.Thick, SeekbarStyle.Circular -> { // Preview for Circular added here
+      SeekbarStyle.Standard, SeekbarStyle.Thick, SeekbarStyle.Circular -> { 
         StandardSeekbar(position = position, duration = duration, chapters = dummyChapters, isPaused = false, isScrubbing = false, seekbarStyle = style, onSeek = {}, onSeekFinished = {})
       }
       SeekbarStyle.Wavy -> {
