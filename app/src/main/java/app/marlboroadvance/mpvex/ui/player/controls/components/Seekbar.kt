@@ -20,12 +20,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,7 +36,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,9 +44,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -109,7 +105,7 @@ fun SeekbarWithTimers(
       value = if (isUserInteracting) userPosition else position,
       timersInverted.first,
       onClick = { clickEvent(); positionTimerOnClick() },
-      modifier = Modifier.width(64.dp), // Width kam ki taaki seekbar ko lamba/wide hone ki jagah mile
+      modifier = Modifier.width(92.dp), // Wapas 92.dp kar diya taaki chhota rahe
     )
 
     Box(
@@ -211,7 +207,7 @@ fun SeekbarWithTimers(
       value = if (timersInverted.second) position - duration else duration,
       isInverted = timersInverted.second,
       onClick = { clickEvent(); durationTimerOnCLick() },
-      modifier = Modifier.width(64.dp), // Width kam ki
+      modifier = Modifier.width(92.dp), // Wapas 92.dp kar diya
     )
   }
 }
@@ -368,7 +364,6 @@ fun StandardSeekbar(
     chapters: ImmutableList<Segment>,
     isPaused: Boolean = false,
     isScrubbing: Boolean = false,
-    useWavySeekbar: Boolean = false,
     seekbarStyle: SeekbarStyle = SeekbarStyle.Standard,
     onSeek: (Float) -> Unit,
     onSeekFinished: () -> Unit,
@@ -400,9 +395,9 @@ fun StandardSeekbar(
     val baseTrackHeight = if (isThick) 16.dp else 6.dp
     val trackHeightDp = baseTrackHeight * heightFraction 
     
-    // Yahan hum circular ke liye base size `4.dp` de rahe hain, jisse Slider ki track ki length poori rahe.
-    val logicalThumbWidth = if (isThick) 6.dp else 4.dp 
-    val thumbHeight = 16.dp
+    // Proper sizes so slider calculates padding automatically (fits inside the video!)
+    val logicalThumbWidth = if (isCircular) 24.dp else if (isThick) 6.dp else 4.dp 
+    val thumbHeight = if (isCircular) 24.dp else 16.dp
     val thumbShape = if (isThick) RoundedCornerShape(logicalThumbWidth / 2) else CircleShape
 
     Slider(
@@ -478,21 +473,9 @@ fun StandardSeekbar(
         },
         thumb = {
             if (isCircular) {
-                // FAKE WIDTH FIX: Canvas use karke drawCircle se bounds ke bahar shape draw karenge bina size ko disturb kiye
-                Canvas(modifier = Modifier.width(logicalThumbWidth).height(thumbHeight)) {
-                    val center = Offset(size.width / 2f, size.height / 2f)
-                    // Outer glow (radius 12dp)
-                    drawCircle(
-                        color = primaryColor.copy(alpha = 0.2f),
-                        radius = 12.dp.toPx(),
-                        center = center
-                    )
-                    // Inner main thumb (radius 7dp)
-                    drawCircle(
-                        color = primaryColor,
-                        radius = 7.dp.toPx(),
-                        center = center
-                    )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(logicalThumbWidth)) {
+                    Box(modifier = Modifier.size(24.dp).background(primaryColor.copy(alpha = 0.2f), CircleShape))
+                    Box(modifier = Modifier.size(14.dp).background(primaryColor, CircleShape))
                 }
             } else {
                 Box(modifier = Modifier.width(logicalThumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
@@ -522,7 +505,7 @@ fun SeekbarPreview(
   Box(modifier = modifier.height(32.dp), contentAlignment = Alignment.Center) {
     when (style) {
       SeekbarStyle.Standard, SeekbarStyle.Thick, SeekbarStyle.Circular -> { 
-        StandardSeekbar(position = position, duration = duration, chapters = dummyChapters, isPaused = false, isScrubbing = false, useWavySeekbar = true, seekbarStyle = style, onSeek = {}, onSeekFinished = {})
+        StandardSeekbar(position = position, duration = duration, chapters = dummyChapters, isPaused = false, isScrubbing = false, seekbarStyle = style, onSeek = {}, onSeekFinished = {})
       }
       SeekbarStyle.Wavy -> {
         SquigglySeekbar(position = position, duration = duration, chapters = dummyChapters, isPaused = false, isScrubbing = false, useWavySeekbar = true, seekbarStyle = SeekbarStyle.Wavy, onSeek = {}, onSeekFinished = {})
