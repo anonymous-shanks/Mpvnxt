@@ -1631,8 +1631,28 @@ class PlayerViewModel(
       return false
     }
 
-    // Check if played
-    val playbackState = playbackStateRepository.getVideoDataByTitle(uri.toString())
+    // CRITICAL FIX: To check history, we must generate the EXACT same identifier
+    // that getMediaIdentifier() generates when the video is played.
+    // If we just use uri.toString(), it won't match what's in the database for local files!
+    
+    // We need to simulate the intent data to get the right identifier
+    val dummyIntent = Intent()
+    if (uri.scheme == "file" || uri.scheme == "content") {
+        dummyIntent.data = uri
+    } else {
+        dummyIntent.putExtra(Intent.EXTRA_TEXT, uri.toString())
+        dummyIntent.type = "text/plain"
+    }
+    
+    val fileName = getFileNameFromUri(uri)
+    val trueMediaIdentifier = getMediaIdentifier(dummyIntent, fileName)
+
+    Log.d(TAG, "checkIsNewVideo: Checking identifier -> $trueMediaIdentifier (for URI: $uri)")
+
+    // Check if played using the correct identifier
+    val playbackState = playbackStateRepository.getVideoDataByTitle(trueMediaIdentifier)
+    
+    // Video is new if NO history exists OR if history exists but position is 0
     return playbackState == null || playbackState.lastPosition <= 0
   }
 
@@ -1931,4 +1951,6 @@ fun <T> Flow<T>.collectAsState(
     thisRef: Any?,
     property: KProperty<*>,
   ) = value
+}
+
 }
