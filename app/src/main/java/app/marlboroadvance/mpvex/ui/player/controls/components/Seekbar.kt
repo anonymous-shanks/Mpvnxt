@@ -21,12 +21,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,7 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -46,9 +45,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -110,7 +106,7 @@ fun SeekbarWithTimers(
       value = if (isUserInteracting) userPosition else position,
       timersInverted.first,
       onClick = { clickEvent(); positionTimerOnClick() },
-      modifier = Modifier.width(92.dp),
+      modifier = Modifier.width(64.dp),
     )
 
     Box(
@@ -212,7 +208,7 @@ fun SeekbarWithTimers(
       value = if (timersInverted.second) position - duration else duration,
       isInverted = timersInverted.second,
       onClick = { clickEvent(); durationTimerOnCLick() },
-      modifier = Modifier.width(92.dp),
+      modifier = Modifier.width(64.dp),
     )
   }
 }
@@ -400,9 +396,10 @@ fun StandardSeekbar(
     val baseTrackHeight = if (isThick) 16.dp else 6.dp
     val trackHeightDp = baseTrackHeight * heightFraction 
     
-    val thumbWidth = if (isCircular) 16.dp else if (isThick) 6.dp else 4.dp
-    val thumbHeight = if (isCircular) 16.dp else if (isThick) 16.dp else 16.dp
-    val thumbShape = if (isCircular) CircleShape else if (isThick) RoundedCornerShape(thumbWidth / 2) else CircleShape
+    // FIX FOR TRACK LENGTH: Always use 4.dp or 6.dp for slider layout to keep track long
+    val logicalThumbWidth = if (isThick) 6.dp else 4.dp 
+    val thumbHeight = 16.dp
+    val thumbShape = if (isThick) RoundedCornerShape(logicalThumbWidth / 2) else CircleShape
 
     Slider(
         value = position,
@@ -477,12 +474,16 @@ fun StandardSeekbar(
         },
         thumb = {
             if (isCircular) {
-                Box(contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.size(24.dp).background(primaryColor.copy(alpha = 0.2f), CircleShape))
-                    Box(modifier = Modifier.width(thumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
+                // FAKE WIDTH FIX: Box chota (4.dp), par requiredSize bada (24.dp)
+                Box(
+                    modifier = Modifier.width(logicalThumbWidth).height(thumbHeight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(modifier = Modifier.requiredSize(24.dp).background(primaryColor.copy(alpha = 0.2f), CircleShape))
+                    Box(modifier = Modifier.requiredSize(14.dp).background(primaryColor, CircleShape))
                 }
             } else {
-                Box(modifier = Modifier.width(thumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
+                Box(modifier = Modifier.width(logicalThumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
             }
         }
     )
