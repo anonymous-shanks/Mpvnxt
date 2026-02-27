@@ -56,6 +56,7 @@ import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
+
 enum class RepeatMode {
   OFF,      // No repeat
   ONE,      // Repeat current file
@@ -1575,10 +1576,9 @@ class PlayerViewModel(
         isPlaying = isCurrentlyPlaying,
         path = path,
         progressPercent = if (isCurrentlyPlaying) currentProgress else 0f,
-        isWatched = isCurrentlyPlaying && currentProgress >= 95f, 
+        isWatched = isCurrentlyPlaying && currentProgress >= 95f,
         duration = durationStr,
         resolution = resolutionStr,
-        isNew = false 
       )
     }
   }
@@ -1633,6 +1633,8 @@ class PlayerViewModel(
       }
     }
   }
+  
+  
 
   fun playPlaylistItem(index: Int) {
     val activity = host as? PlayerActivity ?: return
@@ -1645,18 +1647,8 @@ class PlayerViewModel(
    */
   fun refreshPlaylistItems() {
     viewModelScope.launch(Dispatchers.IO) {
-      val baseItems = getPlaylistData()
-      if (baseItems != null) {
-        
-        val updatedItems = baseItems.map { item ->
-          if (item.isPlaying) {
-            item.copy(isNew = false)
-          } else {
-            val state = playbackStateDao.getVideoDataByTitle(item.title)
-            item.copy(isNew = state == null)
-          }
-        }
-
+      val updatedItems = getPlaylistData()
+      if (updatedItems != null) {
         // Clear cache if playlist size changed
         if (_playlistItems.value.size != updatedItems.size) {
           metadataCache.evictAll()
