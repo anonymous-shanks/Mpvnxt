@@ -81,7 +81,7 @@ data class PlaylistItem(
   val path: String = "", 
   val duration: String = "", 
   val resolution: String = "",
-  val isNew: Boolean = false, // <-- Naya variable added
+  val isNew: Boolean = false, // <-- DB se check ho kar aayega
 )
 
 class LRUBitmapCache(private val maxSize: Int) {
