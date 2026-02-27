@@ -105,7 +105,7 @@ fun SeekbarWithTimers(
       value = if (isUserInteracting) userPosition else position,
       timersInverted.first,
       onClick = { clickEvent(); positionTimerOnClick() },
-      modifier = Modifier.width(92.dp), // Wapas 92.dp kar diya taaki chhota rahe
+      modifier = Modifier.width(92.dp),
     )
 
     Box(
@@ -207,7 +207,7 @@ fun SeekbarWithTimers(
       value = if (timersInverted.second) position - duration else duration,
       isInverted = timersInverted.second,
       onClick = { clickEvent(); durationTimerOnCLick() },
-      modifier = Modifier.width(92.dp), // Wapas 92.dp kar diya
+      modifier = Modifier.width(92.dp),
     )
   }
 }
@@ -395,7 +395,6 @@ fun StandardSeekbar(
     val baseTrackHeight = if (isThick) 16.dp else 6.dp
     val trackHeightDp = baseTrackHeight * heightFraction 
     
-    // Proper sizes so slider calculates padding automatically (fits inside the video!)
     val logicalThumbWidth = if (isCircular) 24.dp else if (isThick) 6.dp else 4.dp 
     val thumbHeight = if (isCircular) 24.dp else 16.dp
     val thumbShape = if (isThick) RoundedCornerShape(logicalThumbWidth / 2) else CircleShape
@@ -474,8 +473,11 @@ fun StandardSeekbar(
         thumb = {
             if (isCircular) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(logicalThumbWidth)) {
-                    Box(modifier = Modifier.size(24.dp).background(primaryColor.copy(alpha = 0.2f), CircleShape))
-                    Box(modifier = Modifier.size(14.dp).background(primaryColor, CircleShape))
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        drawCircle(color = primaryColor.copy(alpha = 0.2f), radius = 12.dp.toPx(), center = center)
+                        drawCircle(color = primaryColor, radius = 7.dp.toPx(), center = center)
+                    }
                 }
             } else {
                 Box(modifier = Modifier.width(logicalThumbWidth).height(thumbHeight).background(primaryColor, thumbShape))
