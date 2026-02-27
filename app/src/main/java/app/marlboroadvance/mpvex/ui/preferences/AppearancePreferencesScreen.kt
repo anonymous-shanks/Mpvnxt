@@ -38,8 +38,6 @@ import me.zhanghai.compose.preference.SliderPreference
 import me.zhanghai.compose.preference.SwitchPreference
 import org.koin.compose.koinInject
 import kotlin.math.roundToInt
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 @Serializable
 object AppearancePreferencesScreen : Screen {
@@ -295,6 +293,25 @@ object AppearancePreferencesScreen : Screen {
                                 summary = {
                                     Text(
                                         text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_summary),
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            )
+
+                            PreferenceDivider()
+
+                            val quickPlayFab by browserPreferences.quickPlayFab.collectAsState()
+                            SwitchPreference(
+                                value = quickPlayFab,
+                                onValueChange = { browserPreferences.quickPlayFab.set(it) },
+                                title = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_quick_play_fab_title),
+                                    )
+                                },
+                                summary = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_quick_play_fab_summary),
                                         color = MaterialTheme.colorScheme.outline,
                                     )
                                 }
