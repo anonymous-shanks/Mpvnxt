@@ -54,6 +54,7 @@ import java.io.File
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import app.marlboroadvance.mpvex.preferences.AdvancedPreferences
+import app.marlboroadvance.mpvex.domain.playbackstate.repository.PlaybackStateRepository
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -91,7 +92,7 @@ class PlayerViewModel(
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val advancedPreferences: AdvancedPreferences by inject()
   private val json: Json by inject()
-  private val playbackStateDao: app.marlboroadvance.mpvex.database.dao.PlaybackStateDao by inject()
+  private val playbackStateRepository: PlaybackStateRepository by inject()
   private val wyzieRepository: WyzieSearchRepository by inject()
 
   // Playlist items for the playlist sheet
@@ -1631,7 +1632,7 @@ class PlayerViewModel(
     }
 
     // Check if played
-    val playbackState = playbackStateDao.getVideoDataByTitle(uri.toString())
+    val playbackState = playbackStateRepository.getVideoDataByTitle(uri.toString())
     return playbackState == null || playbackState.lastPosition <= 0
   }
 
