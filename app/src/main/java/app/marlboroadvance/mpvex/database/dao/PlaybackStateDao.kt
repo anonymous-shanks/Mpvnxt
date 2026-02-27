@@ -1,12 +1,10 @@
 package app.marlboroadvance.mpvex.database.dao
 
-import androidx.annotation.Keep
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import app.marlboroadvance.mpvex.database.entities.PlaybackStateEntity
 
-@Keep // <-- Yeh tag R8 Compiler ko is class ko chhedne/delete karne se rokega (No more Koin crash!)
 @Dao
 interface PlaybackStateDao {
   @Upsert
