@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import app.marlboroadvance.mpvex.R
+import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.preferences.AudioPreferences
 import app.marlboroadvance.mpvex.preferences.GesturePreferences
 import app.marlboroadvance.mpvex.preferences.PlayerPreferences
@@ -84,6 +85,7 @@ class PlayerViewModel(
 ) : ViewModel(),
   KoinComponent {
   private val playerPreferences: PlayerPreferences by inject()
+  private val appearancePreferences: AppearancePreferences by inject()
   private val gesturePreferences: GesturePreferences by inject()
   private val audioPreferences: AudioPreferences by inject()
   private val subtitlesPreferences: SubtitlesPreferences by inject()
@@ -140,10 +142,10 @@ class PlayerViewModel(
       _isOnlineSectionExpanded.value = !_isOnlineSectionExpanded.value
   }
 
-  // Cache for video metadata to avoid re-extracting — LruCache handles bounds + thread-safety
-  private val metadataCache = object : android.util.LruCache<String, Pair<String, String>>(100) {}
+  // Cache for video metadata (Duration, Resolution, isNew flag)
+  private val metadataCache = object : android.util.LruCache<String, Triple<String, String, Boolean>>(100) {}
 
-  private fun updateMetadataCache(key: String, value: Pair<String, String>) {
+  private fun updateMetadataCache(key: String, value: Triple<String, String, Boolean>) {
     metadataCache.put(key, value)
   }
 
@@ -1567,7 +1569,7 @@ class PlayerViewModel(
 
       // Try to get from cache first (synchronized access)
       val cacheKey = uri.toString()
-      val (durationStr, resolutionStr) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: ("" to "")
+      val (durationStr, resolutionStr, isNewCache) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: Triple("", "", false)
 
       app.marlboroadvance.mpvex.ui.player.controls.components.sheets.PlaylistItem(
         uri = uri,
@@ -1577,10 +1579,60 @@ class PlayerViewModel(
         path = path,
         progressPercent = if (isCurrentlyPlaying) currentProgress else 0f,
         isWatched = isCurrentlyPlaying && currentProgress >= 95f,
+        isNew = isNewCache,
         duration = durationStr,
         resolution = resolutionStr,
       )
     }
+  }
+
+  private suspend fun checkIsNewVideo(uri: Uri): Boolean {
+    if (!appearancePreferences.showUnplayedOldVideoLabel.get()) return false
+
+    val thresholdDays = appearancePreferences.unplayedOldVideoDays.get()
+    val thresholdMillis = thresholdDays * 24L * 60 * 60 * 1000L
+    val currentTime = System.currentTimeMillis()
+
+    var dateAddedMillis = 0L
+
+    try {
+      if (uri.scheme == "file") {
+        val file = File(uri.path ?: return false)
+        if (file.exists()) {
+          dateAddedMillis = file.lastModified()
+        }
+      } else if (uri.scheme == "content") {
+        host.context.contentResolver.query(
+          uri,
+          arrayOf(
+            android.provider.MediaStore.MediaColumns.DATE_ADDED,
+            android.provider.MediaStore.MediaColumns.DATE_MODIFIED
+          ),
+          null, null, null
+        )?.use { cursor ->
+          if (cursor.moveToFirst()) {
+            val addedCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATE_ADDED)
+            val modifiedCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATE_MODIFIED)
+            
+            val addedSecs = if (addedCol != -1) cursor.getLong(addedCol) else 0L
+            val modifiedSecs = if (modifiedCol != -1) cursor.getLong(modifiedCol) else 0L
+            
+            // DATE_ADDED and DATE_MODIFIED are usually in seconds
+            dateAddedMillis = maxOf(addedSecs, modifiedSecs) * 1000L
+          }
+        }
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Error reading file date for $uri", e)
+    }
+
+    if (dateAddedMillis == 0L || (currentTime - dateAddedMillis) > thresholdMillis) {
+      return false
+    }
+
+    // Check if played
+    val playbackState = playbackStateDao.getPlaybackState(uri.toString())
+    return playbackState == null || playbackState.position <= 0L
   }
 
   private fun getVideoMetadata(uri: Uri): Pair<String, String> {
@@ -1680,7 +1732,7 @@ class PlayerViewModel(
       // Limit concurrent metadata extraction to avoid overwhelming resources
       val batchSize = 5
       items.chunked(batchSize).forEach { batch ->
-        val updates = mutableMapOf<String, Pair<String, String>>()
+        val updates = mutableMapOf<String, Triple<String, String, Boolean>>()
 
         // Extract metadata for the batch
         batch.forEach { item ->
@@ -1690,10 +1742,13 @@ class PlayerViewModel(
           if (metadataCache.get(cacheKey) == null) {
             // Extract metadata
             val (durationStr, resolutionStr) = getVideoMetadata(item.uri)
+            
+            // Evaluate 'isNew' status efficiently
+            val isNew = checkIsNewVideo(item.uri)
 
             // Update cache and track update
-            updateMetadataCache(cacheKey, durationStr to resolutionStr)
-            updates[cacheKey] = durationStr to resolutionStr
+            updateMetadataCache(cacheKey, Triple(durationStr, resolutionStr, isNew))
+            updates[cacheKey] = Triple(durationStr, resolutionStr, isNew)
           }
         }
 
@@ -1701,8 +1756,8 @@ class PlayerViewModel(
         if (updates.isNotEmpty()) {
           _playlistItems.value = _playlistItems.value.map { currentItem ->
             val cacheKey = currentItem.uri.toString()
-            val (durationStr, resolutionStr) = updates[cacheKey] ?: return@map currentItem
-            currentItem.copy(duration = durationStr, resolution = resolutionStr)
+            val (durationStr, resolutionStr, isNewStatus) = updates[cacheKey] ?: return@map currentItem
+            currentItem.copy(duration = durationStr, resolution = resolutionStr, isNew = isNewStatus)
           }
         }
       }
