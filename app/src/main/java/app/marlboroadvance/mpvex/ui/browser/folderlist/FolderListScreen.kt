@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleFloatingActionButton
 import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
@@ -421,41 +423,70 @@ object FolderListScreen : Screen {
           modifier = Modifier.padding(bottom = 88.dp),
           expanded = isFabExpanded.value,
           button = {
-            Box(
-              modifier = Modifier.then(
-                if (quickPlayFab) {
-                  Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {
-                      coroutineScope.launch {
-                        val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 1)
-                        val lastPlayed = recentlyPlayedVideos.firstOrNull()
-                        if (lastPlayed != null) {
-                          MediaUtils.playFile(lastPlayed.filePath, context, "recently_played_button")
-                        } else {
-                          android.widget.Toast.makeText(context, "No recently played video", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                      }
-                    },
-                    onLongClick = {
-                      isFabExpanded.value = !isFabExpanded.value
-                    }
-                  )
-                } else Modifier
-              )
+            TooltipBox(
+              positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                if (isFabExpanded.value) {
+                  TooltipAnchorPosition.Start
+                } else {
+                  TooltipAnchorPosition.Above
+                }
+              ),
+              tooltip = { PlainTooltip { Text("Toggle menu") } },
+              state = rememberTooltipState(),
             ) {
-              TooltipBox(
-                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                  if (isFabExpanded.value) {
-                    TooltipAnchorPosition.Start
-                  } else {
-                    TooltipAnchorPosition.Above
+              if (quickPlayFab) {
+                // Custom FAB allowing direct long click & single click without interception issues
+                Surface(
+                  modifier = Modifier
+                    .animateFloatingActionButton(
+                      visible = !selectionManager.isInSelectionMode && isFabVisible.value && !app.marlboroadvance.mpvex.ui.browser.MainScreen.getPermissionDeniedState(),
+                      alignment = Alignment.BottomEnd,
+                    )
+                    .size(56.dp),
+                  shape = RoundedCornerShape(16.dp),
+                  color = MaterialTheme.colorScheme.primaryContainer,
+                  contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                  shadowElevation = 6.dp
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .fillMaxSize()
+                      .combinedClickable(
+                        onClick = {
+                          coroutineScope.launch {
+                            val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 1)
+                            val lastPlayed = recentlyPlayedVideos.firstOrNull()
+                            if (lastPlayed != null) {
+                              MediaUtils.playFile(lastPlayed.filePath, context, "recently_played_button")
+                            } else {
+                              android.widget.Toast.makeText(context, "No recently played video", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                          }
+                        },
+                        onLongClick = {
+                          isFabExpanded.value = !isFabExpanded.value
+                        }
+                      ),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    val checkedProgress by animateFloatAsState(
+                      targetValue = if (isFabExpanded.value) 1f else 0f,
+                      label = "fab_anim"
+                    )
+                    val imageVector by remember {
+                      derivedStateOf {
+                        if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.PlayArrow
+                      }
+                    }
+                    Icon(
+                      painter = rememberVectorPainter(imageVector),
+                      contentDescription = null,
+                      modifier = Modifier.animateIcon({ checkedProgress })
+                    )
                   }
-                ),
-                tooltip = { PlainTooltip { Text("Toggle menu") } },
-                state = rememberTooltipState(),
-              ) {
+                }
+              } else {
+                // Default original FAB
                 ToggleFloatingActionButton(
                   modifier = Modifier.animateFloatingActionButton(
                     visible = !selectionManager.isInSelectionMode && isFabVisible.value && !app.marlboroadvance.mpvex.ui.browser.MainScreen.getPermissionDeniedState(),
@@ -463,9 +494,7 @@ object FolderListScreen : Screen {
                   ),
                   checked = isFabExpanded.value,
                   onCheckedChange = { 
-                    if (!quickPlayFab) {
-                      isFabExpanded.value = !isFabExpanded.value 
-                    }
+                    isFabExpanded.value = !isFabExpanded.value 
                   },
                 ) {
                   val imageVector by remember {
@@ -1199,4 +1228,6 @@ private suspend fun searchFoldersAndVideos(
   }
   
   return results
+}
+
 }
