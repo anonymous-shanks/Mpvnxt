@@ -54,7 +54,6 @@ import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleFloatingActionButton
-import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -77,6 +76,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -468,7 +468,6 @@ object FolderListScreen : Screen {
               state = rememberTooltipState(),
             ) {
               if (quickPlayFab) {
-                // Custom FAB allowing direct long click & single click without interception issues
                 Surface(
                   modifier = Modifier
                     .animateFloatingActionButton(
@@ -486,7 +485,6 @@ object FolderListScreen : Screen {
                       .fillMaxSize()
                       .combinedClickable(
                         onClick = {
-                          // CRUCIAL LOGIC: If menu is open, click only closes it. Otherwise, play recent.
                           if (isFabExpanded.value) {
                             isFabExpanded.value = false
                           } else {
@@ -519,12 +517,13 @@ object FolderListScreen : Screen {
                     Icon(
                       painter = rememberVectorPainter(imageVector),
                       contentDescription = null,
-                      modifier = Modifier.animateIcon({ checkedProgress })
+                      modifier = Modifier.graphicsLayer {
+                        rotationZ = checkedProgress * 180f
+                      }
                     )
                   }
                 }
               } else {
-                // Default original FAB
                 ToggleFloatingActionButton(
                   modifier = Modifier.animateFloatingActionButton(
                     visible = !selectionManager.isInSelectionMode && isFabVisible.value && !app.marlboroadvance.mpvex.ui.browser.MainScreen.getPermissionDeniedState(),
@@ -547,7 +546,9 @@ object FolderListScreen : Screen {
                   Icon(
                     painter = rememberVectorPainter(imageVector),
                     contentDescription = null,
-                    modifier = Modifier.animateIcon({ checkedProgress }),
+                    modifier = Modifier.graphicsLayer {
+                      rotationZ = checkedProgress * 180f
+                    }
                   )
                 }
               }
@@ -593,10 +594,8 @@ object FolderListScreen : Screen {
         when (permissionState.status) {
           PermissionStatus.Granted -> {
             if (isSearching) {
-              // Show search results
               Box(modifier = Modifier.fillMaxSize()) {
                 if (isSearchLoading) {
-                  // Loading state
                   Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
@@ -604,7 +603,6 @@ object FolderListScreen : Screen {
                     CircularProgressIndicator()
                   }
                 } else if (searchResults.isEmpty()) {
-                  // No results
                   EmptyState(
                     icon = Icons.Filled.Search,
                     title = "No results found",
@@ -612,7 +610,6 @@ object FolderListScreen : Screen {
                     modifier = Modifier.fillMaxSize(),
                   )
                 } else {
-                  // Show search results
                   SearchResultsContent(
                     searchResults = searchResults,
                     navigationBarHeight = navigationBarHeight,
@@ -669,7 +666,6 @@ object FolderListScreen : Screen {
         }
       }
 
-      // Dialogs
       PlayLinkSheet(
         isOpen = showLinkDialog.value,
         onDismiss = { showLinkDialog.value = false },
@@ -735,7 +731,6 @@ private fun FolderListContent(
   val showLoading = isLoading && !hasCompletedInitialLoad
   val showEmpty = folders.isEmpty() && hasCompletedInitialLoad && !foldersWereDeleted
 
-  // Scrollbar alpha animation
   val isAtTop by remember {
     derivedStateOf {
       if (isGridMode) {
@@ -810,7 +805,6 @@ private fun FolderListContent(
         )
       }
 
-      // Show background enrichment progress
       if (scanStatus != null && !showLoading) {
         androidx.compose.material3.LinearProgressIndicator(
           modifier = Modifier
@@ -881,7 +875,6 @@ private fun GridContent(
       }
     }
 
-    // Scrollbar with bottom padding
     Box(
       modifier = Modifier
         .fillMaxSize()
@@ -894,7 +887,6 @@ private fun GridContent(
           thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
         ),
       ) {
-        // Empty content - scrollbar only
       }
     }
   }
@@ -952,7 +944,6 @@ private fun ListContent(
       }
     }
 
-    // Scrollbar with bottom padding
     Box(
       modifier = Modifier
         .fillMaxSize()
@@ -965,7 +956,6 @@ private fun ListContent(
           thumbSelectedColor = MaterialTheme.colorScheme.primary.copy(alpha = scrollbarAlpha),
         ),
       ) {
-        // Empty content - scrollbar only
       }
     }
   }
@@ -1125,10 +1115,6 @@ private fun FolderSortDialog(
   )
 }
 
-
-/**
- * Displays search results based on the user's layout preference (grid or list)
- */
 @Composable
 private fun SearchResultsContent(
   searchResults: List<FileSystemItem>,
@@ -1140,7 +1126,7 @@ private fun SearchResultsContent(
 ) {
   val folders = searchResults.filterIsInstance<FileSystemItem.Folder>().map { folder ->
     app.marlboroadvance.mpvex.domain.media.model.VideoFolder(
-      bucketId = folder.path,  // Use path as bucketId since FileSystemItem.Folder doesn't have bucketId
+      bucketId = folder.path,
       name = folder.name,
       path = folder.path,
       videoCount = folder.videoCount,
@@ -1233,10 +1219,6 @@ private fun SearchResultsContent(
   }
 }
 
-/**
- * Searches for folders and videos matching the query
- * Returns FileSystemItem results containing matching folders and videos
- */
 private suspend fun searchFoldersAndVideos(
   context: Context,
   query: String,
@@ -1246,11 +1228,9 @@ private suspend fun searchFoldersAndVideos(
   try {
     Log.d("FolderListScreen", "Searching for: $query")
     
-    // Get all video folders
     val folders = app.marlboroadvance.mpvex.repository.MediaFileRepository
       .getAllVideoFoldersFast(context)
     
-    // Search in folders
     folders.forEach { folder ->
       if (folder.name.contains(query, ignoreCase = true) || 
           folder.path.contains(query, ignoreCase = true)) {
@@ -1266,7 +1246,6 @@ private suspend fun searchFoldersAndVideos(
         )
       }
       
-      // Also search within videos in this folder
       val videos = app.marlboroadvance.mpvex.repository.MediaFileRepository
         .getVideosInFolder(context, folder.bucketId)
       
@@ -1290,5 +1269,4 @@ private suspend fun searchFoldersAndVideos(
   }
   
   return results
-}
 }
