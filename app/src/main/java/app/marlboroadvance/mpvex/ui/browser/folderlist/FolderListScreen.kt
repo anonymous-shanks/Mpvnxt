@@ -87,6 +87,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import android.util.Log
 import app.marlboroadvance.mpvex.domain.browser.FileSystemItem
 import app.marlboroadvance.mpvex.domain.media.model.VideoFolder
+import app.marlboroadvance.mpvex.domain.media.model.Video
 import app.marlboroadvance.mpvex.preferences.AppearancePreferences
 import app.marlboroadvance.mpvex.preferences.BrowserPreferences
 import app.marlboroadvance.mpvex.preferences.FolderSortType
@@ -102,6 +103,7 @@ import app.marlboroadvance.mpvex.ui.browser.LocalNavigationBarHeight
 import app.marlboroadvance.mpvex.ui.browser.cards.FolderCard
 import app.marlboroadvance.mpvex.ui.browser.cards.VideoCard
 import app.marlboroadvance.mpvex.ui.browser.components.BrowserTopBar
+import app.marlboroadvance.mpvex.ui.browser.dialogs.AddToPlaylistDialog
 import app.marlboroadvance.mpvex.ui.browser.dialogs.DeleteConfirmationDialog
 import app.marlboroadvance.mpvex.ui.browser.dialogs.GridColumnSelector
 import app.marlboroadvance.mpvex.ui.browser.dialogs.SortDialog
@@ -168,6 +170,7 @@ object FolderListScreen : Screen {
     val scanStatus by viewModel.scanStatus.collectAsState()
     val hasCompletedInitialLoad by viewModel.hasCompletedInitialLoad.collectAsState()
     val foldersWereDeleted by viewModel.foldersWereDeleted.collectAsState()
+    val pinnedFolderPaths by foldersPreferences.pinnedFolders.collectAsState()
 
     // Preferences
     val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
@@ -191,6 +194,10 @@ object FolderListScreen : Screen {
     val sortDialogOpen = rememberSaveable { mutableStateOf(false) }
     val deleteDialogOpen = rememberSaveable { mutableStateOf(false) }
     val showLinkDialog = remember { mutableStateOf(false) }
+    
+    // Add to playlist state
+    val showAddToPlaylistDialog = rememberSaveable { mutableStateOf(false) }
+    var videosToAdd by remember { mutableStateOf<List<Video>>(emptyList()) }
 
     // Search state
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -238,9 +245,11 @@ object FolderListScreen : Screen {
       }
     }
 
-    // Sorting and filtering
-    val sortedFolders = remember(videoFolders, folderSortType, folderSortOrder) {
-      SortUtils.sortFolders(videoFolders, folderSortType, folderSortOrder)
+    // Sorting and filtering (now prioritizes pinned folders)
+    val sortedFolders = remember(videoFolders, folderSortType, folderSortOrder, pinnedFolderPaths) {
+      val baseSorted = SortUtils.sortFolders(videoFolders, folderSortType, folderSortOrder)
+      val (pinned, unpinned) = baseSorted.partition { pinnedFolderPaths.contains(it.path) }
+      pinned + unpinned
     }
 
     val filteredFolders = sortedFolders
@@ -257,6 +266,10 @@ object FolderListScreen : Screen {
       },
       onOperationComplete = { viewModel.refresh() },
     )
+
+    // Check if selected folders are all pinned
+    val selectedItems = selectionManager.getSelectedItems()
+    val allPinned = selectedItems.isNotEmpty() && selectedItems.all { pinnedFolderPaths.contains(it.path) }
 
     // Permissions
     val permissionState = PermissionUtils.handleStoragePermission(
@@ -395,6 +408,26 @@ object FolderListScreen : Screen {
                 }
               }
             },
+            onPinClick = {
+              coroutineScope.launch {
+                val currentPinned = foldersPreferences.pinnedFolders.get().toMutableSet()
+                if (allPinned) {
+                  selectedItems.forEach { currentPinned.remove(it.path) }
+                } else {
+                  selectedItems.forEach { currentPinned.add(it.path) }
+                }
+                foldersPreferences.pinnedFolders.set(currentPinned)
+                selectionManager.clear()
+              }
+            },
+            isPinned = allPinned,
+            onAddToPlaylistClick = {
+              coroutineScope.launch {
+                val selectedIds = selectionManager.getSelectedItems().map { it.bucketId }.toSet()
+                videosToAdd = app.marlboroadvance.mpvex.repository.MediaFileRepository.getVideosForBuckets(context, selectedIds)
+                showAddToPlaylistDialog.value = true
+              }
+            },
             onBlacklistClick = {
               coroutineScope.launch {
                 val selectedFolders = selectionManager.getSelectedItems()
@@ -453,13 +486,18 @@ object FolderListScreen : Screen {
                       .fillMaxSize()
                       .combinedClickable(
                         onClick = {
-                          coroutineScope.launch {
-                            val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 1)
-                            val lastPlayed = recentlyPlayedVideos.firstOrNull()
-                            if (lastPlayed != null) {
-                              MediaUtils.playFile(lastPlayed.filePath, context, "recently_played_button")
-                            } else {
-                              android.widget.Toast.makeText(context, "No recently played video", android.widget.Toast.LENGTH_SHORT).show()
+                          // CRUCIAL LOGIC: If menu is open, click only closes it. Otherwise, play recent.
+                          if (isFabExpanded.value) {
+                            isFabExpanded.value = false
+                          } else {
+                            coroutineScope.launch {
+                              val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 1)
+                              val lastPlayed = recentlyPlayedVideos.firstOrNull()
+                              if (lastPlayed != null) {
+                                MediaUtils.playFile(lastPlayed.filePath, context, "recently_played_button")
+                              } else {
+                                android.widget.Toast.makeText(context, "No recently played video", android.widget.Toast.LENGTH_SHORT).show()
+                              }
                             }
                           }
                         },
@@ -481,7 +519,7 @@ object FolderListScreen : Screen {
                     Icon(
                       painter = rememberVectorPainter(imageVector),
                       contentDescription = null,
-                      modifier = Modifier.animateIcon({ checkedProgress })
+                      modifier = androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon({ checkedProgress })
                     )
                   }
                 }
@@ -588,6 +626,7 @@ object FolderListScreen : Screen {
             } else {
               FolderListContent(
                 folders = filteredFolders,
+                pinnedFolderPaths = pinnedFolderPaths,
                 foldersWithNewCount = foldersWithNewCount,
                 recentlyPlayedFilePath = recentlyPlayedFilePath,
                 isLoading = isLoading,
@@ -632,6 +671,18 @@ object FolderListScreen : Screen {
         onDismiss = { showLinkDialog.value = false },
         onPlayLink = { url -> MediaUtils.playFile(url, context, "play_link") },
       )
+      
+      if (showAddToPlaylistDialog.value) {
+        AddToPlaylistDialog(
+          isOpen = showAddToPlaylistDialog.value,
+          videos = videosToAdd,
+          onDismiss = { 
+            showAddToPlaylistDialog.value = false
+            videosToAdd = emptyList()
+          },
+          onSuccess = { selectionManager.clear() }
+        )
+      }
 
       FolderSortDialog(
         isOpen = sortDialogOpen.value,
@@ -657,6 +708,7 @@ object FolderListScreen : Screen {
 @Composable
 private fun FolderListContent(
   folders: List<VideoFolder>,
+  pinnedFolderPaths: Set<String>,
   foldersWithNewCount: List<app.marlboroadvance.mpvex.ui.browser.folderlist.FolderWithNewCount>,
   recentlyPlayedFilePath: String?,
   isLoading: Boolean,
@@ -726,6 +778,7 @@ private fun FolderListContent(
       if (isGridMode) {
         GridContent(
           folders = folders,
+          pinnedFolderPaths = pinnedFolderPaths,
           foldersWithNewCount = foldersWithNewCount,
           recentlyPlayedFilePath = recentlyPlayedFilePath,
           folderGridColumns = folderGridColumns,
@@ -740,6 +793,7 @@ private fun FolderListContent(
       } else {
         ListContent(
           folders = folders,
+          pinnedFolderPaths = pinnedFolderPaths,
           foldersWithNewCount = foldersWithNewCount,
           recentlyPlayedFilePath = recentlyPlayedFilePath,
           tapThumbnailToSelect = tapThumbnailToSelect,
@@ -769,6 +823,7 @@ private fun FolderListContent(
 @Composable
 private fun GridContent(
   folders: List<VideoFolder>,
+  pinnedFolderPaths: Set<String>,
   foldersWithNewCount: List<app.marlboroadvance.mpvex.ui.browser.folderlist.FolderWithNewCount>,
   recentlyPlayedFilePath: String?,
   folderGridColumns: Int,
@@ -816,6 +871,7 @@ private fun GridContent(
             { onFolderClick(folder) }
           },
           newVideoCount = newCount,
+          isPinned = pinnedFolderPaths.contains(folder.path),
           isGridMode = true,
         )
       }
@@ -843,6 +899,7 @@ private fun GridContent(
 @Composable
 private fun ListContent(
   folders: List<VideoFolder>,
+  pinnedFolderPaths: Set<String>,
   foldersWithNewCount: List<FolderWithNewCount>,
   recentlyPlayedFilePath: String?,
   tapThumbnailToSelect: Boolean,
@@ -885,6 +942,7 @@ private fun ListContent(
             { onFolderClick(folder) }
           },
           newVideoCount = newCount,
+          isPinned = pinnedFolderPaths.contains(folder.path),
           isGridMode = false,
         )
       }
@@ -1228,4 +1286,5 @@ private suspend fun searchFoldersAndVideos(
   }
   
   return results
+}
 }
