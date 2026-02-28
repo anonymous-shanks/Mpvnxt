@@ -65,9 +65,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-/**
- * Unified top bar for browser screens that switches between normal and selection modes
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BrowserTopBar(
@@ -133,9 +130,6 @@ fun BrowserTopBar(
   }
 }
 
-/**
- * Normal mode top bar
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NormalTopBar(
@@ -154,10 +148,8 @@ private fun NormalTopBar(
   val themeTransition = LocalThemeTransitionState.current
   val coroutineScope = rememberCoroutineScope()
   
-  // Track title bounds for animation position
   val titleBounds = remember { mutableStateOf(Rect.Zero) }
   
-  // Helper function to toggle dark mode
   fun toggleDarkMode() {
     when (darkMode) {
       DarkMode.System -> if (darkTheme) {
@@ -194,16 +186,13 @@ private fun NormalTopBar(
         .pointerInput(onTitleLongPress) {
           detectTapGestures(
             onTap = { localOffset ->
-              // Don't allow theme change if animation is in progress
               if (themeTransition?.isAnimating == true) return@detectTapGestures
               
-              // Calculate window position for circular reveal
               val windowOffset = Offset(
                 titleBounds.value.left + localOffset.x,
                 titleBounds.value.top + localOffset.y
               )
               themeTransition?.startTransition(windowOffset)
-              // Delay theme change to allow overlay to display first
               coroutineScope.launch {
                 toggleDarkMode()
               }
@@ -297,9 +286,6 @@ private fun NormalTopBar(
   )
 }
 
-/**
- * Selection mode top bar
- */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SelectionTopBar(
@@ -399,7 +385,6 @@ private fun SelectionTopBar(
       }
     },
     actions = {
-      // Add to Playlist icon
       if (onAddToPlaylistClick != null) {
         IconButton(
           onClick = onAddToPlaylistClick,
@@ -407,14 +392,13 @@ private fun SelectionTopBar(
         ) {
           Icon(
             Icons.Filled.PlaylistAdd,
-            contentDescription = stringResource(R.string.add_folder_to_playlist),
+            contentDescription = "Add folder to playlist",
             modifier = Modifier.size(28.dp),
             tint = MaterialTheme.colorScheme.primary,
           )
         }
       }
       
-      // Pin/Unpin icon
       if (onPinClick != null) {
         IconButton(
           onClick = onPinClick,
@@ -422,14 +406,13 @@ private fun SelectionTopBar(
         ) {
           Icon(
             Icons.Filled.PushPin,
-            contentDescription = if (isPinned) stringResource(R.string.unpin_folder) else stringResource(R.string.pin_folder),
+            contentDescription = if (isPinned) "Unpin folder" else "Pin folder",
             modifier = Modifier.size(24.dp),
             tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
           )
         }
       }
 
-      // Play icon
       if (onPlay != null) {
         IconButton(
           onClick = onPlay,
@@ -444,7 +427,6 @@ private fun SelectionTopBar(
         }
       }
 
-      // Rename icon
       if (onRename != null) {
         IconButton(
           onClick = onRename,
@@ -465,7 +447,6 @@ private fun SelectionTopBar(
         }
       }
 
-      // Info icon
       if (onInfo != null) {
         IconButton(
           onClick = onInfo,
@@ -486,7 +467,6 @@ private fun SelectionTopBar(
         }
       }
 
-      // Share icon
       if (onShare != null) {
         IconButton(
           onClick = onShare,
@@ -501,7 +481,6 @@ private fun SelectionTopBar(
         }
       }
 
-      // Blacklist icon
       if (onBlacklist != null) {
         IconButton(
           onClick = onBlacklist,
@@ -516,7 +495,6 @@ private fun SelectionTopBar(
         }
       }
 
-      // Delete/Remove icon
       if (onDelete != null) {
         IconButton(
           onClick = onDelete,
