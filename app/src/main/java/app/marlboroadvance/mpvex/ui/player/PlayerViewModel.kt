@@ -187,6 +187,7 @@ class PlayerViewModel(
       }
     }
   }
+  
   val maxVolume = host.audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 
   val subtitleTracks: StateFlow<List<TrackNode>> =
@@ -305,9 +306,25 @@ class PlayerViewModel(
   private val _isVerticalFlipped = MutableStateFlow(false)
   val isVerticalFlipped: StateFlow<Boolean> = _isVerticalFlipped.asStateFlow()
 
+  // Cached values for seeking
+  private val doubleTapToSeekDuration by lazy { gesturePreferences.doubleTapToSeekDuration.get() }
+  private val inputMethodManager by lazy {
+    host.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+  }
+
+  // Seek coalescing for smooth performance
+  private var pendingSeekOffset: Int = 0
+  private var seekCoalesceJob: Job? = null
+  private var mediaSearchJob: Job? = null
+
+  private companion object {
+    const val TAG = "PlayerViewModel"
+    const val SEEK_COALESCE_DELAY_MS = 60L
+    val VALID_SUBTITLE_EXTENSIONS =
+      setOf("srt", "ass", "ssa", "sub", "idx", "vtt", "sup", "txt", "pgs")
+  }
+
   init {
-    // Track selection is now handled by TrackSelector in PlayerActivity
-    
     // Restore repeat mode and shuffle state from preferences
     _repeatMode.value = playerPreferences.repeatMode.get()
     _shuffleEnabled.value = playerPreferences.shuffleEnabled.get()
@@ -345,7 +362,6 @@ class PlayerViewModel(
         MPVLib.setPropertyString("hr-seek-framedrop", if (shouldUsePreciseSeeking) "no" else "yes")
       }
     }
-    
     
     // Refresh custom buttons when Lua scripts are enabled/disabled or configuration changes
     viewModelScope.launch {
@@ -420,7 +436,7 @@ class PlayerViewModel(
           MPVLib.command("load-script", file.absolutePath)
         }
       } catch (e: Exception) {
-        android.util.Log.e("PlayerViewModel", "Error setting up custom buttons", e)
+        Log.e(TAG, "Error setting up custom buttons", e)
       }
     }
   }
@@ -482,23 +498,6 @@ class PlayerViewModel(
     }
   }
 
-  // Cached values
-  private val doubleTapToSeekDuration by lazy { gesturePreferences.doubleTapToSeekDuration.get() }
-  private val inputMethodManager by lazy {
-    host.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-  }
-
-  // Seek coalescing for smooth performance
-  private var pendingSeekOffset: Int = 0
-  private var seekCoalesceJob: Job? = null
-
-  private companion object {
-    const val TAG = "PlayerViewModel"
-    const val SEEK_COALESCE_DELAY_MS = 60L
-    val VALID_SUBTITLE_EXTENSIONS =
-      setOf("srt", "ass", "ssa", "sub", "idx", "vtt", "sup", "txt", "pgs")
-  }
-
   // ==================== Timer ====================
 
   fun startTimer(seconds: Int) {
@@ -516,8 +515,6 @@ class PlayerViewModel(
         showToast(host.context.getString(R.string.toast_sleep_timer_ended))
       }
   }
-
-  // ==================== Decoder ====================
 
   // ==================== Audio/Subtitle Management ====================
 
@@ -538,7 +535,7 @@ class PlayerViewModel(
         withContext(Dispatchers.Main) {
           showToast("Failed to load audio: ${e.message}")
         }
-        android.util.Log.e("PlayerViewModel", "Error adding audio", e)
+        Log.e(TAG, "Error adding audio", e)
       }
     }
   }
@@ -547,7 +544,7 @@ class PlayerViewModel(
     viewModelScope.launch(Dispatchers.IO) {
       val uriString = uri.toString()
       if (_externalSubtitles.contains(uriString)) {
-        android.util.Log.d("PlayerViewModel", "Subtitle already tracked, skipping: $uriString")
+        Log.d(TAG, "Subtitle already tracked, skipping: $uriString")
         return@launch
       }
 
@@ -568,8 +565,7 @@ class PlayerViewModel(
               Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
           } catch (e: SecurityException) {
-            // Permission already granted, not available, or not needed (e.g. from tree).
-            android.util.Log.i("PlayerViewModel", "Persistent permission not taken for $uri (may already have it via tree)")
+            Log.i(TAG, "Persistent permission not taken for $uri (may already have it via tree)")
           }
         }
 
@@ -582,7 +578,6 @@ class PlayerViewModel(
         MPVLib.command("sub-add", mpvPath, mode)
 
         // Track external subtitle URI for persistence
-        val uriString = uri.toString()
         if (!_externalSubtitles.contains(uriString)) {
           _externalSubtitles.add(uriString)
         }
@@ -624,7 +619,7 @@ class PlayerViewModel(
           }
         }
       } catch (e: Exception) {
-        android.util.Log.e("PlayerViewModel", "Error scanning local subtitles: ${e.message}", e)
+        Log.e(TAG, "Error scanning local subtitles: ${e.message}", e)
       }
     }
   }
@@ -639,7 +634,6 @@ class PlayerViewModel(
       scanLocalSubtitles(mediaTitle)
     }
   }
-
 
   fun removeSubtitle(id: Int) {
     viewModelScope.launch(Dispatchers.IO) {
@@ -664,13 +658,11 @@ class PlayerViewModel(
         }
       }
       
-        MPVLib.command("sub-remove", id.toString())
+      MPVLib.command("sub-remove", id.toString())
     }
   }
 
   // --- Media Search and Series Management ---
-
-  private var mediaSearchJob: Job? = null
 
   fun searchMedia(query: String) {
     mediaSearchJob?.cancel()
@@ -687,7 +679,7 @@ class PlayerViewModel(
           _mediaSearchResults.value = results
         }
         .onFailure {
-          // Silent failure for autocomplete, or optionally show toast(if someone is reading this if u need u can impelmen this in future )
+          // Silent failure
         }
       _isSearchingMedia.value = false
     }
@@ -700,9 +692,7 @@ class PlayerViewModel(
     if (result.mediaType == "tv") {
       fetchTvShowDetails(result.id)
     } else {
-      // For movies, just search subtitles directly with the TMDB ID
       searchSubtitles(result.title)
-      // Ideally we should pass the TMDB ID to searchSubtitles too if the API supports it
     }
   }
 
@@ -812,7 +802,6 @@ class PlayerViewModel(
           val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
           if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
         }
-
       "file" -> uri.lastPathSegment
       else -> uri.lastPathSegment
     }
@@ -864,8 +853,6 @@ class PlayerViewModel(
         host.windowInsetsController.show(WindowInsetsCompat.Type.navigationBars())
       }
     } catch (e: Exception) {
-      // Defensive: InsetsController animation can crash under FD pressure
-      // (e.g. during high-res HEVC playback on certain devices)
       Log.e(TAG, "Failed to show system bars", e)
     }
     _controlsShown.value = true
@@ -1140,7 +1127,6 @@ class PlayerViewModel(
 
   fun cycleScreenRotations() {
     // Temporarily cycle orientation WITHOUT modifying preferences
-    // Preferences remain the single source of truth and will be reapplied on next video
     host.hostRequestedOrientation =
       when (host.hostRequestedOrientation) {
         ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
@@ -1287,13 +1273,6 @@ class PlayerViewModel(
     MPVLib.setPropertyDouble("video-zoom", zoom.toDouble())
   }
 
-  // Video pan (for pan & zoom feature)
-  private val _videoPanX = MutableStateFlow(0f)
-  val videoPanX: StateFlow<Float> = _videoPanX.asStateFlow()
-
-  private val _videoPanY = MutableStateFlow(0f)
-  val videoPanY: StateFlow<Float> = _videoPanY.asStateFlow()
-
   fun setVideoPan(x: Float, y: Float) {
     _videoPanX.value = x
     _videoPanY.value = y
@@ -1331,9 +1310,8 @@ class PlayerViewModel(
   fun toggleFrameNavigationExpanded() {
     val wasExpanded = _isFrameNavigationExpanded.value
     _isFrameNavigationExpanded.update { !it }
-    // Update frame info and pause when expanding (going from false to true)
+    // Update frame info and pause when expanding
     if (!wasExpanded) {
-      // Pause the video if it's playing
       if (paused != true) {
         pauseUnpause()
       }
@@ -1341,7 +1319,6 @@ class PlayerViewModel(
       showFrameInfoOverlay()
       resetFrameNavigationTimer()
     } else {
-      // Cancel timer when manually collapsing
       frameNavigationCollapseJob?.cancel()
     }
   }
@@ -1361,7 +1338,6 @@ class PlayerViewModel(
       updateFrameInfo()
       withContext(Dispatchers.Main) {
         showFrameInfoOverlay()
-        // Reset the inactivity timer
         resetFrameNavigationTimer()
       }
     }
@@ -1378,7 +1354,6 @@ class PlayerViewModel(
       updateFrameInfo()
       withContext(Dispatchers.Main) {
         showFrameInfoOverlay()
-        // Reset the inactivity timer
         resetFrameNavigationTimer()
       }
     }
@@ -1402,25 +1377,18 @@ class PlayerViewModel(
       try {
         val includeSubtitles = playerPreferences.includeSubtitlesInSnapshot.get()
 
-        // Generate filename with timestamp
-        val timestamp =
-          java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
         val filename = "mpv_snapshot_$timestamp.png"
-
-        // Create a temporary file first
         val tempFile = File(context.cacheDir, filename)
 
-        // Take screenshot using MPV to temp file, with or without subtitles
         if (includeSubtitles) {
           MPVLib.command("screenshot-to-file", tempFile.absolutePath, "subtitles")
         } else {
           MPVLib.command("screenshot-to-file", tempFile.absolutePath, "video")
         }
 
-        // Wait a bit for MPV to finish writing the file
         delay(200)
 
-        // Check if file was created
         if (!tempFile.exists() || tempFile.length() == 0L) {
           withContext(Dispatchers.Main) {
             Toast.makeText(context, "Failed to create screenshot", Toast.LENGTH_SHORT).show()
@@ -1428,64 +1396,41 @@ class PlayerViewModel(
           return@launch
         }
 
-        // Use different methods based on Android version
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-          // Android 10+ - Use MediaStore with RELATIVE_PATH
           val contentValues =
             android.content.ContentValues().apply {
               put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, filename)
               put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
-              put(
-                android.provider.MediaStore.Images.Media.RELATIVE_PATH,
-                "${android.os.Environment.DIRECTORY_PICTURES}/mpvSnaps",
-              )
+              put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_PICTURES}/mpvSnaps")
               put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
             }
 
           val resolver = context.contentResolver
-          val imageUri =
-            resolver.insert(
-              android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-              contentValues,
-            )
+          val imageUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
 
           if (imageUri != null) {
-            // Copy temp file to MediaStore
             resolver.openOutputStream(imageUri)?.use { outputStream ->
               tempFile.inputStream().use { inputStream ->
                 inputStream.copyTo(outputStream)
               }
             }
 
-            // Mark as finished
             contentValues.clear()
             contentValues.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
             resolver.update(imageUri, contentValues, null, null)
 
-            // Delete temp file
             tempFile.delete()
 
-            // Show success toast
             withContext(Dispatchers.Main) {
-              Toast
-                .makeText(
-                  context,
-                  context.getString(R.string.player_sheets_frame_navigation_snapshot_saved),
-                  Toast.LENGTH_SHORT,
-                ).show()
+              Toast.makeText(context, context.getString(R.string.player_sheets_frame_navigation_snapshot_saved), Toast.LENGTH_SHORT).show()
             }
           } else {
             throw Exception("Failed to create MediaStore entry")
           }
         } else {
-          // Android 9 and below - Use legacy external storage
-          val picturesDir =
-            android.os.Environment.getExternalStoragePublicDirectory(
-              android.os.Environment.DIRECTORY_PICTURES,
-            )
+          val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
           val snapshotsDir = File(picturesDir, "mpvSnaps")
 
-          // Create directory if it doesn't exist
           if (!snapshotsDir.exists()) {
             val created = snapshotsDir.mkdirs()
             if (!created && !snapshotsDir.exists()) {
@@ -1497,21 +1442,10 @@ class PlayerViewModel(
           tempFile.copyTo(destFile, overwrite = true)
           tempFile.delete()
 
-          // Notify media scanner about the new file
-          android.media.MediaScannerConnection.scanFile(
-            context,
-            arrayOf(destFile.absolutePath),
-            arrayOf("image/png"),
-            null,
-          )
+          android.media.MediaScannerConnection.scanFile(context, arrayOf(destFile.absolutePath), arrayOf("image/png"), null)
 
           withContext(Dispatchers.Main) {
-            Toast
-              .makeText(
-                context,
-                context.getString(R.string.player_sheets_frame_navigation_snapshot_saved),
-                Toast.LENGTH_SHORT,
-              ).show()
+            Toast.makeText(context, context.getString(R.string.player_sheets_frame_navigation_snapshot_saved), Toast.LENGTH_SHORT).show()
           }
         }
       } catch (e: Exception) {
@@ -1562,12 +1496,9 @@ class PlayerViewModel(
 
     return activity.playlist.mapIndexed { index, uri ->
       val title = activity.getPlaylistItemTitle(uri)
-      // Path is not used for thumbnail loading - thumbnails are loaded directly from URI
-      // Keep it for cache key compatibility
       val path = uri.toString()
       val isCurrentlyPlaying = index == activity.playlistIndex
 
-      // Try to get from cache first (synchronized access)
       val cacheKey = uri.toString()
       val (durationStr, resolutionStr, isNewCache) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: Triple("", "", false)
 
@@ -1638,7 +1569,6 @@ class PlayerViewModel(
             val addedSecs = if (addedCol != -1) cursor.getLong(addedCol) else 0L
             val modifiedSecs = if (modifiedCol != -1) cursor.getLong(modifiedCol) else 0L
             
-            // DATE_ADDED and DATE_MODIFIED are usually in seconds
             dateAddedMillis = maxOf(addedSecs, modifiedSecs) * 1000L
           }
         }
@@ -1659,12 +1589,10 @@ class PlayerViewModel(
   }
 
   private fun getVideoMetadata(uri: Uri): Pair<String, String> {
-    // Skip metadata extraction for network streams and M3U playlists
     if (uri.scheme?.startsWith("http") == true || uri.scheme == "rtmp" || uri.scheme == "ftp" || uri.scheme == "rtsp" || uri.scheme == "mms") {
       return "" to ""
     }
 
-    // Skip M3U/M3U8 files
     val uriString = uri.toString().lowercase()
     if (uriString.contains(".m3u8") || uriString.contains(".m3u")) {
       return "" to ""
@@ -1672,15 +1600,12 @@ class PlayerViewModel(
 
     val retriever = android.media.MediaMetadataRetriever()
     return try {
-      // For file:// URIs, use the path directly (faster)
       if (uri.scheme == "file") {
         retriever.setDataSource(uri.path)
       } else {
-        // For content:// URIs, use context
         retriever.setDataSource(host.context, uri)
       }
 
-      // Get duration
       val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
       val durationStr = if (durationMs != null) {
         val seconds = durationMs.toLong() / 1000
@@ -1689,7 +1614,6 @@ class PlayerViewModel(
         "${minutes}:${remainingSeconds.toString().padStart(2, '0')}"
       } else ""
 
-      // Get resolution
       val width = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
       val height = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
       val resolutionStr = if (width != null && height != null) {
@@ -1698,7 +1622,7 @@ class PlayerViewModel(
 
       durationStr to resolutionStr
     } catch (e: Exception) {
-      android.util.Log.e("PlayerViewModel", "Failed to get video metadata for $uri", e)
+      Log.e(TAG, "Failed to get video metadata for $uri", e)
       "" to ""
     } finally {
       try {
@@ -1708,74 +1632,48 @@ class PlayerViewModel(
       }
     }
   }
-  
-  
 
   fun playPlaylistItem(index: Int) {
     val activity = host as? PlayerActivity ?: return
     activity.playPlaylistItem(index)
   }
 
-  /**
-   * Refreshes the playlist items to update the currently playing indicator.
-   * Called when a new video starts playing to update the playlist UI.
-   */
   fun refreshPlaylistItems() {
     viewModelScope.launch(Dispatchers.IO) {
       val updatedItems = getPlaylistData()
       if (updatedItems != null) {
-        // Clear cache if playlist size changed
         if (_playlistItems.value.size != updatedItems.size) {
           metadataCache.evictAll()
         }
-
         _playlistItems.value = updatedItems
-
-        // Load metadata asynchronously in the background
         loadPlaylistMetadataAsync(updatedItems)
       }
     }
   }
 
-  /**
-   * Loads metadata for all playlist items asynchronously in the background.
-   * Updates the playlist items as metadata becomes available.
-   * Uses batched updates to avoid O(n²) complexity with large playlists.
-   * Skips metadata extraction for M3U playlists (network streams).
-   */
   private fun loadPlaylistMetadataAsync(items: List<app.marlboroadvance.mpvex.ui.player.controls.components.sheets.PlaylistItem>) {
     viewModelScope.launch(Dispatchers.IO) {
-      // Skip metadata extraction for M3U playlists
       val activity = host as? PlayerActivity
       if (activity?.isCurrentPlaylistM3U() == true) {
         Log.d(TAG, "Skipping metadata extraction for M3U playlist")
         return@launch
       }
 
-      // Limit concurrent metadata extraction to avoid overwhelming resources
       val batchSize = 5
       items.chunked(batchSize).forEach { batch ->
         val updates = mutableMapOf<String, Triple<String, String, Boolean>>()
 
-        // Extract metadata for the batch
         batch.forEach { item ->
           val cacheKey = item.uri.toString()
 
-          // Skip if already in cache (LruCache is thread-safe)
           if (metadataCache.get(cacheKey) == null) {
-            // Extract metadata
             val (durationStr, resolutionStr) = getVideoMetadata(item.uri)
-            
-            // Evaluate 'isNew' status efficiently
             val isNew = checkIsNewVideo(item.uri)
-
-            // Update cache and track update
             updateMetadataCache(cacheKey, Triple(durationStr, resolutionStr, isNew))
             updates[cacheKey] = Triple(durationStr, resolutionStr, isNew)
           }
         }
 
-        // Apply all batched updates at once (single playlist update)
         if (updates.isNotEmpty()) {
           _playlistItems.value = _playlistItems.value.map { currentItem ->
             val cacheKey = currentItem.uri.toString()
@@ -1817,10 +1715,7 @@ class PlayerViewModel(
       RepeatMode.ALL -> RepeatMode.OFF
     }
 
-    // Persist the repeat mode
     playerPreferences.repeatMode.set(_repeatMode.value)
-
-    // Show overlay update instead of toast
     playerUpdate.value = PlayerUpdates.RepeatMode(_repeatMode.value)
   }
 
@@ -1828,13 +1723,8 @@ class PlayerViewModel(
     _shuffleEnabled.value = !_shuffleEnabled.value
     val activity = host as? PlayerActivity
 
-    // Persist the shuffle state
     playerPreferences.shuffleEnabled.set(_shuffleEnabled.value)
-
-    // Notify activity to handle shuffle state change
     activity?.onShuffleToggled(_shuffleEnabled.value)
-
-    // Show overlay update instead of toast
     playerUpdate.value = PlayerUpdates.Shuffle(_shuffleEnabled.value)
   }
 
@@ -1855,7 +1745,6 @@ class PlayerViewModel(
 
   fun setLoopA() {
     if (_abLoopA.value != null) {
-      // Toggle off - clear point A
       _abLoopA.value = null
       MPVLib.setPropertyString("ab-loop-a", "no")
       return
@@ -1868,7 +1757,6 @@ class PlayerViewModel(
 
   fun setLoopB() {
     if (_abLoopB.value != null) {
-      // Toggle off - clear point B
       _abLoopB.value = null
       MPVLib.setPropertyString("ab-loop-b", "no")
       return
@@ -1880,7 +1768,6 @@ class PlayerViewModel(
   }
 
   fun clearABLoop() {
-    val hadLoop = _abLoopA.value != null || _abLoopB.value != null
     _abLoopA.value = null
     _abLoopB.value = null
     MPVLib.setPropertyString("ab-loop-a", "no")
@@ -1901,7 +1788,6 @@ class PlayerViewModel(
     val newMirrorState = !_isMirrored.value
     _isMirrored.value = newMirrorState
     
-    // Use labeled video filter for mirroring to avoid state desync
     if (newMirrorState) {
       MPVLib.command("vf", "add", "@mpvex_hflip:hflip")
     } else {
@@ -1914,7 +1800,6 @@ class PlayerViewModel(
     val newState = !_isVerticalFlipped.value
     _isVerticalFlipped.value = newState
 
-    // Use labeled video filter for vflip to avoid state desync
     if (newState) {
       MPVLib.command("vf", "add", "@mpvex_vflip:vflip")
     } else {
