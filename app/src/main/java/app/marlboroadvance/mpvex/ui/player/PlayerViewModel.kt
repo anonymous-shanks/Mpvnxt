@@ -162,8 +162,6 @@ class PlayerViewModel(
   private var mediaSearchJob: Job? = null
   private var pendingSeekOffset: Int = 0
   private var seekCoalesceJob: Job? = null
-  private var frameNavigationCollapseJob: Job? = null
-  
   private val doubleTapToSeekDuration by lazy { gesturePreferences.doubleTapToSeekDuration.get() }
   private val inputMethodManager by lazy {
     host.context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -340,30 +338,15 @@ class PlayerViewModel(
   }
 
   // ==================== Playback & UI Logic ====================
-  fun pause() {
-    viewModelScope.launch(Dispatchers.IO) {
-      MPVLib.setPropertyBoolean("pause", true)
-      withContext(Dispatchers.Main) { host.abandonAudioFocus() }
-    }
-  }
+  fun pause() { viewModelScope.launch(Dispatchers.IO) { MPVLib.setPropertyBoolean("pause", true); withContext(Dispatchers.Main) { host.abandonAudioFocus() } } }
+  fun unpause() { viewModelScope.launch(Dispatchers.IO) { withContext(Dispatchers.Main) { host.requestAudioFocus() }; MPVLib.setPropertyBoolean("pause", false) } }
   
-  fun unpause() {
-    viewModelScope.launch(Dispatchers.IO) {
-      withContext(Dispatchers.Main) { host.requestAudioFocus() }
-      MPVLib.setPropertyBoolean("pause", false)
-    }
-  }
-  
-  fun pauseUnpause() {
-    viewModelScope.launch(Dispatchers.IO) {
-      val isPaused: Boolean = MPVLib.getPropertyBoolean("pause") ?: false
-      if (isPaused) {
-        withContext(Dispatchers.Main) { host.requestAudioFocus() }
-        MPVLib.setPropertyBoolean("pause", false)
-      } else {
-        MPVLib.setPropertyBoolean("pause", true)
-        withContext(Dispatchers.Main) { host.abandonAudioFocus() }
-      }
+  // EXPLICIT NON-NULL BOOLEAN CHECK
+  fun pauseUnpause() { 
+    if (MPVLib.getPropertyBoolean("pause") == true) {
+        unpause()
+    } else {
+        pause()
     }
   }
   
@@ -487,20 +470,15 @@ class PlayerViewModel(
   fun resetVideoPan() { setVideoPan(0f, 0f) }
   fun resetVideoZoom() { setVideoZoom(0f) }
 
-  fun updateFrameInfo() { 
-    _currentFrame.value = MPVLib.getPropertyInt("estimated-frame-number") ?: 0
-    val dur = MPVLib.getPropertyDouble("duration") ?: 0.0
-    val fps = MPVLib.getPropertyDouble("container-fps") ?: 0.0
-    _totalFrames.value = if (dur > 0 && fps > 0) (dur * fps).toInt() else 0 
-  }
+  fun updateFrameInfo() { _currentFrame.value = MPVLib.getPropertyInt("estimated-frame-number") ?: 0; val dur = MPVLib.getPropertyDouble("duration") ?: 0.0; val fps = MPVLib.getPropertyDouble("container-fps") ?: 0.0; _totalFrames.value = if (dur > 0 && fps > 0) (dur * fps).toInt() else 0 }
   
+  // EXPLICIT NON-NULL BOOLEAN CHECK
   fun toggleFrameNavigationExpanded() { 
     val wasExpanded = _isFrameNavigationExpanded.value
     _isFrameNavigationExpanded.update { !it }
     
     if (!wasExpanded) {
-      val isCurrentlyPaused: Boolean = MPVLib.getPropertyBoolean("pause") ?: false
-      if (!isCurrentlyPaused) { 
+      if (MPVLib.getPropertyBoolean("pause") != true) { 
         pauseUnpause() 
       }
       updateFrameInfo()
@@ -511,10 +489,10 @@ class PlayerViewModel(
     }
   }
   
+  // EXPLICIT NON-NULL BOOLEAN CHECK
   fun frameStepForward() { 
     viewModelScope.launch(Dispatchers.IO) { 
-      val isPaused: Boolean = MPVLib.getPropertyBoolean("pause") ?: false
-      if (!isPaused) {
+      if (MPVLib.getPropertyBoolean("pause") != true) {
         pauseUnpause()
         delay(50)
       }
@@ -525,10 +503,10 @@ class PlayerViewModel(
     } 
   }
   
+  // EXPLICIT NON-NULL BOOLEAN CHECK
   fun frameStepBackward() { 
     viewModelScope.launch(Dispatchers.IO) { 
-      val isPaused: Boolean = MPVLib.getPropertyBoolean("pause") ?: false
-      if (!isPaused) {
+      if (MPVLib.getPropertyBoolean("pause") != true) {
         pauseUnpause()
         delay(50)
       }
@@ -685,15 +663,15 @@ class PlayerViewModel(
   fun getPlaylistData(): List<app.marlboroadvance.mpvex.ui.player.controls.components.sheets.PlaylistItem>? {
     val a = host as? PlayerActivity ?: return null
     if (a.playlist.isEmpty()) return null
+    val cPos = pos ?: 0
+    val cDur = duration ?: 0
     
     return a.playlist.mapIndexed { index, uri ->
       val title = a.getPlaylistItemTitle(uri)
       val path = uri.toString()
       val isCurrentlyPlaying = index == a.playlistIndex
       
-      val currentPos = pos ?: 0
-      val currentDuration = duration ?: 0
-      val itemProgress = if (isCurrentlyPlaying && currentDuration > 0) ((currentPos.toFloat() / currentDuration.toFloat()) * 100f).coerceIn(0f, 100f) else 0f
+      val itemProgress = if (isCurrentlyPlaying && cDur > 0) ((cPos.toFloat() / cDur.toFloat()) * 100f).coerceIn(0f, 100f) else 0f
 
       val cacheKey = uri.toString()
       var (durationStr, resolutionStr, isNewCache) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: Triple("", "", false)
@@ -782,7 +760,8 @@ class PlayerViewModel(
           val key = item.uri.toString()
           if (metadataCache.get(key) == null) {
             val meta = getVideoMetadata(item.uri)
-            val isN = if (item.isPlaying) false else checkIsNewVideo(item.uri)
+            // EXPLICIT NON-NULL BOOLEAN CHECK
+            val isN = if (item.isPlaying == true) false else checkIsNewVideo(item.uri)
             updateMetadataCache(key, Triple(meta.first, meta.second, isN))
             updates[key] = Triple(meta.first, meta.second, isN)
           }
