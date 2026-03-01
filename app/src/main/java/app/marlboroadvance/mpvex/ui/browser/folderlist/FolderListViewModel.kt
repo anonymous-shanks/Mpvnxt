@@ -69,19 +69,19 @@ class FolderListViewModel(
     refreshJob = viewModelScope.launch(Dispatchers.IO) {
       if (_videoFolders.value.isEmpty()) {
         _isLoading.value = true
+        _scanStatus.value = "Scanning folders..."
       }
-      _scanStatus.value = "Scanning folders..."
       _foldersWereDeleted.value = false
 
       try {
         val context = getApplication<Application>().applicationContext
         
-        // 1. Fetch folders (fast operation)
+        // 1. Fetch folders (Super fast)
         val folders = MediaFileRepository.getAllVideoFoldersFast(context)
         _videoFolders.value = folders
         _hasCompletedInitialLoad.value = true
 
-        // ** CRITICAL FIX: Unblock the UI immediately so it doesn't scan every time on startup **
+        // ** CRITICAL FIX: Turant UI ko unblock karo, taaki app baar-baar scan karta hua na dikhe **
         _isLoading.value = false
         _scanStatus.value = null
 
@@ -89,7 +89,7 @@ class FolderListViewModel(
         val recent = RecentlyPlayedOps.getRecentlyPlayed(1).firstOrNull()
         _recentlyPlayedFilePath.value = recent?.filePath
 
-        // 3. Calculate "NEW" counts entirely in the background
+        // 3. Calculate "NEW" counts completely in background
         calculateNewVideoCounts(folders)
 
       } catch (e: Exception) {
