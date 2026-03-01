@@ -265,8 +265,21 @@ object FolderListScreen : Screen {
       onOperationComplete = { viewModel.refresh() },
     )
 
+    // Selection States Logic
     val selectedItems = selectionManager.getSelectedItems()
     val allPinned = selectedItems.isNotEmpty() && selectedItems.all { pinnedFolderSet.contains(it.path) }
+    val allUnpinned = selectedItems.isNotEmpty() && selectedItems.none { pinnedFolderSet.contains(it.path) }
+    
+    // Mixed selection check (some pinned, some unpinned)
+    val isMixedSelection = selectedItems.isNotEmpty() && !allPinned && !allUnpinned
+    val isPinEnabled = selectedItems.isNotEmpty() && !isMixedSelection
+
+    // Move Up / Move Down logic
+    val isSinglePinnedSelected = selectionManager.selectedCount == 1 && allPinned
+    val selectedPinnedIndex = if (isSinglePinnedSelected) pinnedFolderPaths.indexOf(selectedItems.first().path) else -1
+    
+    val isMoveUpEnabled = isSinglePinnedSelected && selectedPinnedIndex > 0
+    val isMoveDownEnabled = isSinglePinnedSelected && selectedPinnedIndex >= 0 && selectedPinnedIndex < pinnedFolderPaths.size - 1
 
     val permissionState = PermissionUtils.handleStoragePermission(
       onPermissionGranted = { viewModel.refresh() },
@@ -414,38 +427,37 @@ object FolderListScreen : Screen {
               }
             },
             isPinned = allPinned,
-            onMoveUpClick = if (selectionManager.selectedCount == 1 && allPinned) {
-              {
-                coroutineScope.launch {
-                  val path = selectedItems.first().path
-                  val currentList = pinnedFolderPaths.toMutableList()
-                  val index = currentList.indexOf(path)
-                  if (index > 0) {
-                    val temp = currentList[index - 1]
-                    currentList[index - 1] = currentList[index]
-                    currentList[index] = temp
-                    foldersPreferences.pinnedFoldersList.set(currentList.joinToString("|||"))
-                    // Note: selectionManager.clear() is intentionally NOT called here
-                  }
+            isPinEnabled = isPinEnabled,
+            onMoveUpClick = {
+              coroutineScope.launch {
+                val path = selectedItems.first().path
+                val currentList = pinnedFolderPaths.toMutableList()
+                val index = currentList.indexOf(path)
+                if (index > 0) {
+                  val temp = currentList[index - 1]
+                  currentList[index - 1] = currentList[index]
+                  currentList[index] = temp
+                  foldersPreferences.pinnedFoldersList.set(currentList.joinToString("|||"))
+                  // Selection intentionally NOT cleared to allow continuous movement
                 }
               }
-            } else null,
-            onMoveDownClick = if (selectionManager.selectedCount == 1 && allPinned) {
-              {
-                coroutineScope.launch {
-                  val path = selectedItems.first().path
-                  val currentList = pinnedFolderPaths.toMutableList()
-                  val index = currentList.indexOf(path)
-                  if (index >= 0 && index < currentList.size - 1) {
-                    val temp = currentList[index + 1]
-                    currentList[index + 1] = currentList[index]
-                    currentList[index] = temp
-                    foldersPreferences.pinnedFoldersList.set(currentList.joinToString("|||"))
-                    // Note: selectionManager.clear() is intentionally NOT called here
-                  }
+            },
+            isMoveUpEnabled = isMoveUpEnabled,
+            onMoveDownClick = {
+              coroutineScope.launch {
+                val path = selectedItems.first().path
+                val currentList = pinnedFolderPaths.toMutableList()
+                val index = currentList.indexOf(path)
+                if (index >= 0 && index < currentList.size - 1) {
+                  val temp = currentList[index + 1]
+                  currentList[index + 1] = currentList[index]
+                  currentList[index] = temp
+                  foldersPreferences.pinnedFoldersList.set(currentList.joinToString("|||"))
+                  // Selection intentionally NOT cleared to allow continuous movement
                 }
               }
-            } else null,
+            },
+            isMoveDownEnabled = isMoveDownEnabled,
             onAddToPlaylistClick = {
               coroutineScope.launch {
                 val selectedIds = selectionManager.getSelectedItems().map { it.bucketId }.toSet()
