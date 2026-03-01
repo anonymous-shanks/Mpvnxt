@@ -340,6 +340,7 @@ class PlayerViewModel(
   // ==================== Playback & UI Logic ====================
   fun pause() { viewModelScope.launch(Dispatchers.IO) { MPVLib.setPropertyBoolean("pause", true); withContext(Dispatchers.Main) { host.abandonAudioFocus() } } }
   fun unpause() { viewModelScope.launch(Dispatchers.IO) { withContext(Dispatchers.Main) { host.requestAudioFocus() }; MPVLib.setPropertyBoolean("pause", false) } }
+  
   fun pauseUnpause() { 
     val isCurrentlyPaused = paused ?: false
     if (isCurrentlyPaused) {
@@ -348,6 +349,7 @@ class PlayerViewModel(
         pause()
     }
   }
+  
   fun applyPersistedShuffleState() { if (_shuffleEnabled.value) (host as? PlayerActivity)?.onShuffleToggled(true) }
 
   fun showControls() {
@@ -632,12 +634,14 @@ class PlayerViewModel(
     val a = host as? PlayerActivity ?: return null
     if (a.playlist.isEmpty()) return null
     val cPos = pos ?: 0; val cDur = duration ?: 0
-    val cProg = if (cDur > 0) ((cPos.toFloat() / cDur.toFloat()) * 100f).coerceIn(0f, 100f) else 0f
     
     return a.playlist.mapIndexed { index, uri ->
       val title = a.getPlaylistItemTitle(uri)
       val path = uri.toString()
       val isCurrentlyPlaying = index == a.playlistIndex
+      
+      // Calculate progress locally per item for clarity
+      val itemProgress = if (isCurrentlyPlaying && cDur > 0) ((cPos.toFloat() / cDur.toFloat()) * 100f).coerceIn(0f, 100f) else 0f
 
       val cacheKey = uri.toString()
       var (durationStr, resolutionStr, isNewCache) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: Triple("", "", false)
@@ -658,8 +662,8 @@ class PlayerViewModel(
         index = index,
         isPlaying = isCurrentlyPlaying,
         path = path,
-        progressPercent = if (isCurrentlyPlaying) currentProgress else 0f,
-        isWatched = isCurrentlyPlaying && currentProgress >= 95f,
+        progressPercent = itemProgress,
+        isWatched = isCurrentlyPlaying && itemProgress >= 95f,
         isNew = isNewCache,
         duration = durationStr,
         resolution = resolutionStr,
