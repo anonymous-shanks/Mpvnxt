@@ -462,7 +462,15 @@ class PlayerViewModel(
   fun resetVideoZoom() { setVideoZoom(0f) }
 
   fun updateFrameInfo() { _currentFrame.value = MPVLib.getPropertyInt("estimated-frame-number") ?: 0; val dur = MPVLib.getPropertyDouble("duration") ?: 0.0; val fps = MPVLib.getPropertyDouble("container-fps") ?: 0.0; _totalFrames.value = if (dur > 0 && fps > 0) (dur * fps).toInt() else 0 }
-  fun toggleFrameNavigationExpanded() { if (!_isFrameNavigationExpanded.value) { if (paused == true) { } else { pauseUnpause() }; updateFrameInfo(); playerUpdate.value = PlayerUpdates.FrameInfo(_currentFrame.value, _totalFrames.value); resetFrameNavigationTimer() }; _isFrameNavigationExpanded.update { !it } }
+  fun toggleFrameNavigationExpanded() { 
+    if (!_isFrameNavigationExpanded.value) { 
+      if (paused != true) { pauseUnpause() }
+      updateFrameInfo()
+      playerUpdate.value = PlayerUpdates.FrameInfo(_currentFrame.value, _totalFrames.value)
+      resetFrameNavigationTimer() 
+    }
+    _isFrameNavigationExpanded.update { !it } 
+  }
   fun frameStepForward() { viewModelScope.launch(Dispatchers.IO) { MPVLib.command("no-osd", "frame-step"); delay(100); updateFrameInfo(); resetFrameNavigationTimer() } }
   fun frameStepBackward() { viewModelScope.launch(Dispatchers.IO) { MPVLib.command("no-osd", "frame-back-step"); delay(100); updateFrameInfo(); resetFrameNavigationTimer() } }
   fun resetFrameNavigationTimer() { timerJob?.cancel(); timerJob = viewModelScope.launch { delay(10000); _isFrameNavigationExpanded.value = false } }
@@ -619,7 +627,6 @@ class PlayerViewModel(
     }
   }
   
-  // ==================== Multi-Check History Fix ====================
   private fun getMediaIdentifierForUri(uri: Uri): String {
     val dummyIntent = Intent()
     if (uri.scheme == "file" || uri.scheme == "content") {
@@ -647,32 +654,27 @@ class PlayerViewModel(
       if (uri.scheme == "file") File(uri.path ?: "").let { if (it.exists()) date = it.lastModified() }
       else if (uri.scheme == "content") host.context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATE_MODIFIED), null, null, null)?.use { if (it.moveToFirst()) date = it.getLong(0) * 1000L }
     } catch (e: Exception) {}
-    
     if (date == 0L || (System.currentTimeMillis() - date) > threshold) return false
-
-    // MULTI-CHECK LOGIC
+    
     val possibleIdentifiers = mutableSetOf<String>()
-    possibleIdentifiers.add(getMediaIdentifierForUri(uri)) // Intent emulation (Primary check)
-    possibleIdentifiers.add(uri.toString()) // Raw URI
+    possibleIdentifiers.add(getMediaIdentifierForUri(uri))
+    possibleIdentifiers.add(uri.toString())
     if (uri.scheme == "file" && uri.path != null) {
-        possibleIdentifiers.add(uri.path!!) // Direct file path
+        possibleIdentifiers.add(uri.path!!)
     }
     val fileName = getFileNameFromUri(uri)
     if (fileName != null) {
-        possibleIdentifiers.add(fileName) // Display name
+        possibleIdentifiers.add(fileName)
     }
 
-    // Check database against all possible identities
     for (identifier in possibleIdentifiers) {
         if (identifier.isBlank()) continue
         val history = playbackStateRepository.getVideoDataByTitle(identifier)
         if (history != null && history.lastPosition > 0) {
-            // If any record exists showing watch progress, it is NOT new
             return false
         }
     }
     
-    // No history found anywhere, it IS new
     return true
   }
 
