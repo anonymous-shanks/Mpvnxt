@@ -315,13 +315,11 @@ fun PlayerControls(
           }
         }
 
-        // Slider display duration: 1000ms shown + 300ms exit animation = 1300ms total
         val sliderDisplayDuration = 1000L
 
         val volumeSliderTimestamp by viewModel.volumeSliderTimestamp.collectAsState()
         val brightnessSliderTimestamp by viewModel.brightnessSliderTimestamp.collectAsState()
 
-        // Track timestamp to restart timer on every gesture event
         LaunchedEffect(volumeSliderTimestamp) {
           if (isVolumeSliderShown && volumeSliderTimestamp > 0) {
             delay(sliderDisplayDuration)
@@ -366,7 +364,7 @@ fun PlayerControls(
               top.linkTo(parent.top, spacing.larger)
               bottom.linkTo(parent.bottom, spacing.larger)
             },
-        ) { BrightnessSlider(brightness, 0f..1f) }
+        ) { BrightnessSlider(brightness, 0f..1f, hideBackground = hideBackground) }
 
         AnimatedVisibility(
           isVolumeSliderShown,
@@ -400,7 +398,6 @@ fun PlayerControls(
           val boostCap by audioPreferences.volumeBoostCap.collectAsState()
           val displayVolumeAsPercentage by playerPreferences.displayVolumeAsPercentage.collectAsState()
           
-          // Show if boost is allowed (boostCap > 0) OR if we are currently boosted (> 100)
           val currentBoost = (mpvVolume ?: 100) - 100
           val showBoost = boostCap > 0 || currentBoost > 0
           val effBoostCap = maxOf(boostCap, currentBoost)
@@ -411,6 +408,7 @@ fun PlayerControls(
             range = 0..viewModel.maxVolume,
             boostRange = if (showBoost) 0..effBoostCap else null,
             displayAsPercentage = displayVolumeAsPercentage,
+            hideBackground = hideBackground
           )
         }
 
@@ -438,7 +436,6 @@ fun PlayerControls(
             Modifier.constrainAs(playerUpdates) {
               linkTo(parent.start, parent.end)
               
-              // Yahan smart condition add ki gayi hai
               if (currentPlayerUpdate is PlayerUpdates.MultipleSpeed || currentPlayerUpdate is PlayerUpdates.DynamicSpeedControl) {
                   top.linkTo(parent.top, if (isPortrait) 32.dp else 16.dp)
               } else {
@@ -467,14 +464,11 @@ fun PlayerControls(
               
               if (showDynamicSpeedOverlay) {
                 if (isCollapsed) {
-                  // Simple compact indicator
                   CompactSpeedIndicator(currentSpeed = currentSpeed)
                 } else {
-                  // Full speed control slider
                   SpeedControlSlider(currentSpeed = currentSpeed)
                 }
               } else {
-                // fallback, simple indicator
                 CompactSpeedIndicator(currentSpeed = currentSpeed)
               }
             }
@@ -498,7 +492,7 @@ fun PlayerControls(
               SeekPlayerUpdate(
                 currentTime = seekUpdate.currentTime,
                 seekDelta = "[${seekUpdate.seekDelta}]",
-                modifier = Modifier, // Let content size determine width
+                modifier = Modifier,
               )
             }
 
@@ -556,7 +550,8 @@ fun PlayerControls(
                 start.linkTo(parent.start, spacing.medium)
                 top.linkTo(parent.top)
                 bottom.linkTo(parent.bottom)
-                verticalBias = 0.65f
+                // NEW: Moved slightly down in landscape as requested
+                verticalBias = 0.75f
                 width = Dimension.preferredWrapContent
                 height = Dimension.wrapContent
             }
@@ -613,7 +608,8 @@ fun PlayerControls(
                 end.linkTo(parent.end, spacing.medium)
                 top.linkTo(parent.top)
                 bottom.linkTo(parent.bottom)
-                verticalBias = 0.65f
+                // NEW: Moved slightly down in landscape as requested
+                verticalBias = 0.75f
                 width = Dimension.preferredWrapContent
                 height = Dimension.wrapContent
             }
@@ -669,9 +665,8 @@ fun PlayerControls(
             modifier = Modifier.constrainAs(createRef()) {
                 start.linkTo(parent.start)
                 end.linkTo(parent.end)
-                top.linkTo(parent.top)
-                bottom.linkTo(parent.bottom)
-                verticalBias = 0.72f
+                // NEW: Relaxed slightly to prevent accidental seekbar touches
+                bottom.linkTo(seekbar.top, 16.dp)
                 width = Dimension.preferredWrapContent
                 height = Dimension.wrapContent
             }
@@ -734,7 +729,6 @@ fun PlayerControls(
                 }
               )
               .constrainAs(unlockControlsButton) {
-                // Significantly moves down the lock icon in portrait mode to avoid status bar overlap
                 top.linkTo(parent.top, if (isPortrait) 56.dp else spacing.medium)
                 start.linkTo(parent.start, spacing.medium)
               },
@@ -755,7 +749,8 @@ fun PlayerControls(
               end.linkTo(parent.absoluteRight)
               start.linkTo(parent.absoluteLeft)
               if (isPortrait) {
-                bottom.linkTo(bottomRightControls.top, spacing.large)
+                // NEW: Relaxed from 4.dp to 8.dp for safer touch targets
+                bottom.linkTo(bottomRightControls.top, 8.dp)
               } else {
                 top.linkTo(parent.top)
                 bottom.linkTo(parent.bottom)
@@ -1018,9 +1013,11 @@ fun PlayerControls(
               )
               .constrainAs(seekbar) {
                 if (isPortrait) {
-                  bottom.linkTo(playerPauseButton.top, spacing.small)
+                  // NEW: Relaxed from 0.dp to 8.dp to prevent accidental touches
+                  bottom.linkTo(playerPauseButton.top, 8.dp)
                 } else {
-                  bottom.linkTo(parent.bottom, spacing.extraSmall)
+                  // NEW: Ensured safe 32.dp margin for landscape swipe-to-home
+                  bottom.linkTo(parent.bottom, 32.dp)
                 }
                 start.linkTo(parent.start, spacing.medium)
                 end.linkTo(parent.end, spacing.medium)
