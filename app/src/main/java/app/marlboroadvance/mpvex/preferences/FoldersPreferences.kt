@@ -1,13 +1,14 @@
 package app.marlboroadvance.mpvex.preferences
 
+import app.marlboroadvance.mpvex.preferences.preference.AndroidPreference
 import app.marlboroadvance.mpvex.preferences.preference.PreferenceStore
 
-/**
- * Preferences for folder management
- */
-class FoldersPreferences(
-  preferenceStore: PreferenceStore,
-) {
-  // Set of folder paths that should be hidden from the folder list
-  val blacklistedFolders = preferenceStore.getStringSet("blacklisted_folders", emptySet())
+class FoldersPreferences(store: PreferenceStore) {
+    val defaultFolder = store.getString("default_folder", "")
+    
+    // Restore kiya gaya Hidden Files wala feature
+    val showHiddenFiles = store.getBoolean("show_hidden_files", false)
+    
+    // Tumhara custom Pin Folders wala feature
+    val pinnedFolders = store.getStringSet("pinned_folders", emptySet())
 }
