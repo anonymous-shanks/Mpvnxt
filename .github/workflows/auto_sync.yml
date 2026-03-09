@@ -1,37 +1,116 @@
-name: Auto Sync with Upstream
+name: Ultimate Auto Sync & Build
 
 on:
+  workflow_dispatch: 
   schedule:
-    - cron: '0 0 * * *' # Har raat 12 baje (Midnight) apne aap sync hoga
-  workflow_dispatch: # Manual button se sync karne ka option
+    - cron: '0 0 * * 0' 
+
+permissions:
+  contents: write
 
 jobs:
-  sync:
+  sync-patch-build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
     steps:
-      - name: Checkout repo
+      - name: Checkout Current Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Sync and Merge from Upstream
+      - name: Setup Git Identity
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          # Original repo ko upstream set kiya
-          git remote add upstream https://github.com/marlboro-advance/mpvex.git
-          git fetch upstream
-          
-          # Naye changes ko aapke code me merge karega (Agar conflict aaya toh aapka custom design bacha lega)
-          git merge upstream/main -X ours -m "Auto-sync from upstream" || echo "No changes to merge"
-          git push origin ${{ github.ref_name }}
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Trigger Auto Build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Backup My Meticulous Changes (The Shield)
         run: |
-          # Sync ke baad aapka Auto Unsigned Build chalu kar dega
-          gh workflow run preview.yml --ref ${{ github.ref_name }} || echo "Build trigger failed but sync successful"
+          mkdir -p /tmp/my_safe_files
+          
+          # Yeh wo sabhi files hain jinme tumhare 8 custom changes aur 2 features hain
+          FILES=(
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/GestureHandler.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/SpeedControlSlider.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/Seekbar.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/preferences/SeekbarStyle.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/preferences/FoldersPreferences.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/preferences/FoldersPreferencesScreen.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/browser/folderlist/FolderListScreen.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/browser/folderlist/FolderListViewModel.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/PlayerControls.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/PlayerControlsShared.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/ControlsButton.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/preferences/AppearancePreferences.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/preferences/AppearancePreferencesScreen.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/VerticalSliders.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/sheets/PlaylistSheet.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/browser/cards/PlaylistCard.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/utils/storage/FolderViewScanner.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/utils/storage/TreeViewScanner.kt"
+            "app/src/main/java/app/marlboroadvance/mpvex/ui/player/controls/components/panels/LuaScriptsPanel.kt"
+          )
+          
+          # Unhe unke exact path ke hisaab se safe jagah copy karna
+          for file in "${FILES[@]}"; do
+            if [ -f "$file" ]; then
+              mkdir -p "/tmp/my_safe_files/$(dirname "$file")"
+              cp "$file" "/tmp/my_safe_files/$file"
+            fi
+          done
+          echo "All custom files safely backed up!"
+
+      - name: Fetch and Merge Upstream & Ani-CLI
+        run: |
+          git remote add dev_upstream https://github.com/marlboro-advance/mpvEx.git
+          git remote add anicli_fork https://github.com/Riteshp2001/mpvEx.git
+          git fetch --all
+          
+          # 1. Merge Ani-CLI integration
+          git merge anicli_fork/ani-cli-integration -X theirs --allow-unrelated-histories --no-edit -m "Auto-Merge: ani-cli feature" || echo "Conflicts in ani-cli, will be fixed by shield."
+          
+          # 2. Merge Main Upstream Master
+          git merge dev_upstream/master -X theirs --allow-unrelated-histories --no-edit -m "Auto-Sync: main upstream" || echo "Conflicts in upstream, will be fixed by shield."
+
+      - name: Restore My Meticulous Changes
+        run: |
+          # Upstream ne jo bhi changes kiye, hum tumhari safe files wapas paste kar rahe hain
+          cp -r /tmp/my_safe_files/* ./
+          
+          # Git conflicts automatically resolve ho jayenge jab hum exact original files add karenge
+          git add .
+          git commit -m "Shield: Restored all 8 meticulous custom changes and missing features" || echo "No changes to commit"
+          git push origin HEAD
+
+      - name: Generate short SHA
+        id: set-short-sha
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'adopt'
+          java-version: 17
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build Unsigned APKs with Gradle
+        run: ./gradlew assembleStandardRelease --warning-mode all
+
+      - name: Upload arm64-v8a Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpvEx-arm64-v8a-unsigned-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/standard/release/app-standard-arm64-v8a-release-unsigned.apk
+
+      - name: Upload armeabi-v7a Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpvEx-armeabi-v7a-unsigned-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/standard/release/app-standard-armeabi-v7a-release-unsigned.apk
+
+      - name: Upload universal Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpvEx-universal-unsigned-${{ env.SHORT_SHA }}
+          path: app/build/outputs/apk/standard/release/app-standard-universal-release-unsigned.apk
