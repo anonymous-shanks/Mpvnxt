@@ -406,19 +406,12 @@ private fun IconsLegend() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
-            androidx.compose.foundation.layout.Column {
-                Text(
-                    text = "Icons Legend",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "What is each icon for?",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "Icons Legend",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
 
             // FlowRow grid of icons
             FlowRow(
@@ -433,20 +426,30 @@ private fun IconsLegend() {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.wrapContentWidth()
                     ) {
-                        val modifier = if (button == PlayerButton.VERTICAL_FLIP) {
-                            Modifier.rotate(90f)
+                        if (button == PlayerButton.AB_LOOP) {
+                            // Show Autorenew icon for AB_LOOP
+                            Icon(
+                                imageVector = button.icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
                         } else {
-                            Modifier
-                        }
+                            val modifier = if (button == PlayerButton.VERTICAL_FLIP) {
+                                Modifier.rotate(90f)
+                            } else {
+                                Modifier
+                            }
 
-                        Icon(
-                            imageVector = button.icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .then(modifier)
-                        )
+                            Icon(
+                                imageVector = button.icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .then(modifier)
+                            )
+                        }
                         
                         Text(
                             text = app.marlboroadvance.mpvex.preferences.getPlayerButtonLabel(button),
