@@ -1616,6 +1616,7 @@ class PlayerActivity :
         
         // Re-apply Anime4K shaders (check for resolution limit)
         player.applyAnime4KShaders()
+        checkAndApplyHdrBrightness()
       }
     }
   }
@@ -3407,6 +3408,39 @@ class PlayerActivity :
    */
   fun isCurrentPlaylistM3U(): Boolean = isM3uPlaylist
 
+  /**
+   * Checks if the currently playing video is HDR and forcefully maxes out
+   * device hardware brightness for Vulkan/gpu-next, acting like MX Player.
+   */
+  private fun checkAndApplyHdrBrightness() {
+    if (!mpvInitialized || player.isExiting || isFinishing) return
+    
+    lifecycleScope.launch(Dispatchers.Main) {
+      try {
+        // Fetch color parameters directly from MPV core
+        val gamma = MPVLib.getPropertyString("video-params/gamma") ?: ""
+        val colorSpace = MPVLib.getPropertyString("video-params/color-space") ?: ""
+        
+        // Detect HDR (PQ/HLG gamma or BT.2020 colorspace)
+        val isHDR = gamma.contains("pq", ignoreCase = true) || 
+                    gamma.contains("hlg", ignoreCase = true) || 
+                    colorSpace.contains("bt2020", ignoreCase = true)
+        
+        val windowParams = window.attributes
+        if (isHDR) {
+          Log.d(TAG, "HDR Video detected! Boosting hardware brightness to 100%.")
+          windowParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
+        } else {
+          // If SDR, let user preference or system control it
+          Log.d(TAG, "SDR Video. Returning to normal brightness.")
+          windowParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        window.attributes = windowParams
+      } catch (e: Exception) {
+        Log.e(TAG, "Error applying HDR brightness boost", e)
+      }
+    }
+  }
 
   companion object {
     /**
