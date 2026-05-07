@@ -228,6 +228,13 @@ class PlayerViewModel(
   private val _areControlsLocked = MutableStateFlow(false)
   val areControlsLocked: StateFlow<Boolean> = _areControlsLocked.asStateFlow()
 
+  // HDR State
+  private val _hdrScreenMode = MutableStateFlow(HdrScreenMode.OFF)
+  val hdrScreenMode: StateFlow<HdrScreenMode> = _hdrScreenMode.asStateFlow()
+
+  private val _isHdrScreenOutputPipelineReady = MutableStateFlow(false)
+  val isHdrScreenOutputPipelineReady: StateFlow<Boolean> = _isHdrScreenOutputPipelineReady.asStateFlow()
+
   val playerUpdate = MutableStateFlow<PlayerUpdates>(PlayerUpdates.None)
   val isBrightnessSliderShown = MutableStateFlow(false)
   val isVolumeSliderShown = MutableStateFlow(false)
@@ -369,7 +376,28 @@ class PlayerViewModel(
       }
     }
 
+    // HDR Pipeline Checker
+    viewModelScope.launch(Dispatchers.IO) {
+      while (isActive) {
+        val vo = MPVLib.getPropertyString("vo")
+        val gpuApi = MPVLib.getPropertyString("gpu-api")
+        val isReady = (vo == "gpu-next" && gpuApi == "vulkan")
+        if (_isHdrScreenOutputPipelineReady.value != isReady) {
+            _isHdrScreenOutputPipelineReady.value = isReady
+            applyHdrScreenOutputProperties(_hdrScreenMode.value, isReady)
+        }
+        delay(2000)
+      }
+    }
+
     setupCustomButtons()
+  }
+
+  // ==================== HDR Management ====================
+
+  fun setHdrScreenMode(mode: HdrScreenMode) {
+    _hdrScreenMode.value = mode
+    applyHdrScreenOutputProperties(mode, _isHdrScreenOutputPipelineReady.value)
   }
 
   // ==================== Custom Buttons ====================
